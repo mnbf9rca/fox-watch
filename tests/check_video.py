@@ -6,8 +6,10 @@ import subprocess
 import sys
 from tempfile import TemporaryDirectory
 
+import cv2
+
 from make_video import make_video
-from foxcam.media import cut, scan
+from foxcam.media import annotate, cut, scan, track
 
 
 def check_video(directory: Path) -> None:
@@ -41,7 +43,23 @@ def check_video(directory: Path) -> None:
     else:
         raise AssertionError("truncated input accepted")
     assert truncated.exists()
-    print(f"PASS: moving/static/truncated scan; H.264 cut {duration:.1f}s")
+    result = track(target, min_blob_area=100, edge_margin=80)
+    assert (result["entry_edge"], result["exit_edge"]) == ("left", "far"), result
+    assert len(result["frames"]) == 4
+    assert all(cv2.imread(str(target.parent / name)) is not None for name in result["frames"])
+    annotated = target.with_name("annotated.mp4")
+    annotate(target, annotated, result["track"], "fox", 0.9)
+    output_stream = json.loads(subprocess.check_output(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_streams",
+         "-of", "json", str(annotated)], text=True,
+    ))["streams"][0]
+    assert output_stream["codec_name"] == "h264"
+    assert (output_stream["width"], output_stream["height"]) == (1280, 720)
+    assert output_stream["nb_frames"] == stream["nb_frames"]
+    empty = track(blank, min_blob_area=100, edge_margin=80)
+    assert empty["track"] == [] and empty["entry_edge"] == empty["exit_edge"] == "unknown"
+    print(f"PASS: moving/static/truncated scan; H.264 cut {duration:.1f}s; "
+          f"left → far track; four JPEGs; annotated 1280x720 H.264 ({output_stream['nb_frames']} frames)")
 
 
 if __name__ == "__main__":
