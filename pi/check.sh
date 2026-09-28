@@ -25,13 +25,14 @@ timers)
     expression="*-*-* $START_TIME:00 $TZ"
     systemctl cat foxcam-record.timer | grep -Fx "OnCalendar=$expression" >/dev/null
     systemctl cat foxcam-record.timer | grep -Fx 'OnBootSec=30s' >/dev/null
+    systemctl cat foxcam-record.timer | grep -Fx 'OnActiveSec=30s' >/dev/null
     systemctl cat foxcam-sync.timer | grep -Fx 'OnCalendar=*:0/15' >/dev/null
     calendar=$(systemd-analyze calendar --base-time='2026-10-24 00:00:00 Europe/London' --iterations=3 "$expression")
     [[ $calendar == *'2026-10-24'* && $calendar == *'2026-10-25'* && $calendar == *'BST'* && $calendar == *'GMT'* ]]
     early=$(date -u -d '2026-10-25 01:30:00+01:00' +%Y-%m-%dT%H-%M-%SZ)
     late=$(date -u -d '2026-10-25 01:30:00+00:00' +%Y-%m-%dT%H-%M-%SZ)
     test "$early" != "$late"
-    echo "PASS timers: record=$expression + boot 30s; sync=*:0/15; restart=10s; User=rob; KillMode=control-group; time-wait-sync enabled and ordered; BST/GMT transition and unique UTC names verified"
+    echo "PASS timers: record=$expression + boot 30s + activation 30s; sync=*:0/15; restart=10s; User=rob; KillMode=control-group; time-wait-sync enabled and ordered; BST/GMT transition and unique UTC names verified"
     ;;
 capture|sync-failure)
     test "$EUID" = 0 || { echo 'Run this check with sudo'; exit 1; }

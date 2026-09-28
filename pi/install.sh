@@ -4,12 +4,6 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")" && pwd)
 host=${PI_HOST:-rob@192.168.17.145}
 ssh_options=(-o BatchMode=yes -o ConnectTimeout=10)
-# Validate the committed nonsecret config before copying anything.
-source "$root/foxcam.env"
-for value in "$START_TIME" "$STOP_TIME"; do
-    [[ $value =~ ^([01][0-9]|2[0-3]):[0-5][0-9]$ ]] || { echo 'Times must be HH:MM' >&2; exit 1; }
-done
-[[ $START_TIME != "$STOP_TIME" && $TZ == Europe/London ]] || { echo 'Use distinct times and TZ=Europe/London' >&2; exit 1; }
 stage=$(ssh "${ssh_options[@]}" "$host" 'sudo -n true && mktemp -d')
 trap 'ssh "${ssh_options[@]}" "$host" "rm -rf -- $stage"' EXIT
 scp "${ssh_options[@]}" "$root/record.sh" "$root/sync.sh" "$root/check.sh" "$root/foxcam.env" \
@@ -17,10 +11,19 @@ scp "${ssh_options[@]}" "$root/record.sh" "$root/sync.sh" "$root/check.sh" "$roo
 ssh "${ssh_options[@]}" "$host" bash -s -- "$stage" <<'REMOTE'
 set -euo pipefail
 stage=$1
-source "$stage/foxcam.env"
+# Preserve local tuning and derive the timer from the configuration actually in use.
+config="$stage/foxcam.env"
+if [[ -e /etc/foxcam.env ]]; then config=/etc/foxcam.env; fi
+source "$config"
+for value in "$START_TIME" "$STOP_TIME"; do
+    [[ $value =~ ^([01][0-9]|2[0-3]):[0-5][0-9]$ ]] || { echo 'Times must be HH:MM' >&2; exit 1; }
+done
+[[ $START_TIME != "$STOP_TIME" && $TZ == Europe/London ]] || { echo 'Use distinct times and TZ=Europe/London' >&2; exit 1; }
 sudo -n install -d -o root -g root -m 755 /opt/foxcam-pi /etc/systemd/system/foxcam-record.timer.d
 sudo -n install -o root -g root -m 755 "$stage/record.sh" "$stage/sync.sh" "$stage/check.sh" /opt/foxcam-pi/
-sudo -n install -o root -g root -m 644 "$stage/foxcam.env" /etc/foxcam.env
+if [[ ! -e /etc/foxcam.env ]]; then
+    sudo -n install -o root -g root -m 644 "$stage/foxcam.env" /etc/foxcam.env
+fi
 sudo -n install -o root -g root -m 644 "$stage/"*.service "$stage/"*.timer /etc/systemd/system/
 printf '[Timer]\nOnCalendar=\nOnCalendar=*-*-* %s:00 %s\n' "$START_TIME" "$TZ" |
     sudo -n tee /etc/systemd/system/foxcam-record.timer.d/schedule.conf >/dev/null
