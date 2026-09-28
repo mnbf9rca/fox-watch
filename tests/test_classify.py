@@ -3,6 +3,7 @@ from foxcam.classify import compare, parse_answer
 
 def test_labels_and_comparison():
     assert parse_answer('{"label":"fox","confidence":0.9}') == ("fox", 0.9)
+    assert parse_answer('I see a fox. {"label":"fox","confidence":0.9}') == ("fox", 0.9)
     assert parse_answer('```json\n{"label":"none","confidence":0}\n```') == ("none", 0.0)
     for text in ('{}', '[]', 'not JSON', '{"label":"wolf","confidence":1}',
                  '{"label":"fox","confidence":2}', '{"label":"fox","confidence":NaN}',

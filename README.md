@@ -12,7 +12,7 @@ python3 -m venv .venv
 .venv/bin/python tests/check_pipeline.py
 ```
 
-The default pipeline check needs no secrets and never calls a hosted provider: it uses a dummy credential and a refused localhost connection. It exercises the real CLI and video tools, interrupted-work recovery, classification retries, annotation changes, empty nights, input isolation, low-space refusal, retention, and comparison. `tests/check_transport.py` separately checks a truncated localhost HTTPS response and requires `openssl`.
+The default pipeline check needs no secrets and never calls a hosted provider: it uses a dummy credential and a refused localhost connection. It exercises the real CLI and video tools, interrupted-work recovery, classification retries, annotation changes, empty nights, input isolation, low-space refusal, retention, and comparison.
 
 Run hosted checks only in the shell where 1Password is authenticated. API keys are injected into the child process by `op run`; never export or print them. The live pipeline check loads nonsecret defaults from `vps/foxcam.env.example`, lets the existing environment override them, sends generated synthetic frames, and requires valid model answers plus a playable primary annotation. Synthetic frames are a connectivity check, not a species-accuracy test.
 

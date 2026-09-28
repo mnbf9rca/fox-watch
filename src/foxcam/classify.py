@@ -17,7 +17,13 @@ def parse_answer(text: str) -> tuple[str, float]:
     if not isinstance(text, str):
         raise ValueError("answer must be text")
     fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", text.strip(), re.DOTALL)
-    answer = json.loads(fenced[1] if fenced else text)
+    try:
+        answer = json.loads(fenced[1] if fenced else text)
+    except json.JSONDecodeError:
+        start = text.find("{")
+        if start < 0:
+            raise
+        answer, _ = json.JSONDecoder().raw_decode(text, start)
     if not isinstance(answer, dict) or answer.get("label") not in LABELS:
         raise ValueError("invalid label")
     confidence = answer.get("confidence")
