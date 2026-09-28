@@ -1,6 +1,6 @@
 # Fox Watch
 
-Offline garden-camera processing for Python 3.12+: scan motion, cut visits, track edges, classify four frames, annotate H.264 clips, and generate static night pages. Requires `ffmpeg` and `ffprobe` on the path. Pi recording is installed with the scripts below; VPS provisioning, pipeline scheduling, and private web publishing are later plan tasks.
+Offline garden-camera processing for Python 3.12+: scan motion, cut visits, track edges, classify four frames, annotate H.264 clips, and generate static night pages. Requires `ffmpeg` and `ffprobe` on the path. Pi recording and VPS provisioning are installed with the scripts below; hourly processing remains disabled until secrets are confirmed, and private web publishing is a later plan task.
 
 ## Local setup and checks
 
@@ -32,7 +32,7 @@ op run --env-file=.env.tpl -- sh -c 'set -a; . ./vps/foxcam.env.example; exec .v
 (set -a; . ./vps/foxcam.env.example; .venv/bin/python -m foxcam compare --data ./data)
 ```
 
-`compare` needs configuration but no secrets and makes no network calls. It prints agreement counts against `PRIMARY_MODEL`, excluding missing or unclassified answers; an empty denominator is `n/a`. `run` requires keys only for providers in `MODELS`. Its default data directory is `/data/foxcam`. Use one process at a time; VPS scheduling will provide `flock` in Task 8.
+`compare` needs configuration but no secrets and makes no network calls. It prints agreement counts against `PRIMARY_MODEL`, excluding missing or unclassified answers; an empty denominator is `n/a`. `run` requires keys only for providers in `MODELS`. Its default data directory is `/data/foxcam`. Use one process at a time; the VPS cron entry and manual command below use `/run/lock/foxcam.lock`.
 
 Outputs live in `nights/YYYY-MM-DD/`: raw and annotated clips, `.f0.jpg` through `.f3.jpg`, and JSON sidecars. `site/index.html` lists all nights; individual pages link to media under `/nights/`. A web server must map `/` to `site/` and `/nights/` to `nights/`; opening HTML directly from disk does not resolve those absolute media URLs. `--night` restricts processing and retention, while the index still includes all nights. Empty selected/current nights also get pages.
 
@@ -54,7 +54,7 @@ From the Mac, `bash pi/install.sh` installs root-owned scripts in `/opt/foxcam-p
 
 Recordings are 1280×720 H.264 at 10 fps, with `--inline --intra 10` for a keyframe every second. The indoor defaults are `SHUTTER_US=20000` and `GAIN=4`; calibrate them with the installed IR flood. Each segment captures at most 300 seconds, or the remaining time before `STOP_TIME`. The raw H.264 and remux output stay hidden until ffmpeg finishes; a final rename publishes a UTC timestamp MP4 under `/home/rob/foxcam-recordings`. Interruption never publishes the partial segment, and existing capture names are never overwritten. There is a short capture gap while each segment remuxes; continuous recording is not claimed.
 
-Sync runs every fifteen minutes, selects only visible MP4s, removes sources only after rsync succeeds, and deletes recordings older than seven days even when transfer fails. The future transfer-key path `/home/rob/.ssh/foxcam_ed25519` is only a placeholder in Task 7. Missing keys cause a local failure before SSH, so no VPS connection occurs yet. Task 8 creates that dedicated key and restricts its receiver to `/data/foxcam/incoming`; `sync.sh` uses destination `VPS_HOST:./` inside that restricted namespace. No VPS key is generated or installed by these Pi scripts. The Task 7 installer refuses an already-present transfer key to prevent unexpected VPS traffic; that safeguard must be revisited when enabling transfer in Task 8.
+Sync runs every fifteen minutes, selects only visible MP4s, removes sources only after rsync succeeds, and deletes recordings older than seven days even when transfer fails. `vps/install.sh --provision` creates `/home/rob/.ssh/foxcam_ed25519` on the Pi and restricts its VPS receiver to `/data/foxcam/incoming`; `sync.sh` uses destination `VPS_HOST:./` inside that namespace. The VPS host key is pinned through the Mac's existing authenticated SSH connection and sync enforces strict host checking. Missing keys fail locally before SSH. The Pi installer neither creates nor replaces the transfer key and can be rerun after VPS setup.
 
 ```sh
 ssh -o BatchMode=yes rob@192.168.17.145 'sudo -n /opt/foxcam-pi/check.sh timers'
@@ -63,3 +63,34 @@ ssh -o BatchMode=yes rob@192.168.17.145 'sudo -n /opt/foxcam-pi/check.sh sync-fa
 ```
 
 The capture check temporarily stops and later restores the recorder/timer, records five minutes as `rob` in a temporary directory, checks codec/size/rate and keyframe spacing, decodes the whole segment, interrupts a second capture, and tests a short scheduled stop boundary. Move something in front of the indoor camera during the five-minute recording; the check verifies recording mechanics, not animal detection. The sync-failure check uses only localhost port 1 and an empty test identity, verifying refusal, an unchanged recent recording, and eight-day cleanup. The timer check covers the October 2026 BST/GMT transition and distinct UTC names during the repeated local hour.
+
+## VPS provisioning and activation
+
+Run from the Mac with key-authenticated SSH to the Pi and `root@62.238.55.235`:
+
+```sh
+bash vps/install.sh --check
+bash vps/install.sh --provision
+ssh -o BatchMode=yes root@62.238.55.235 'bash /opt/foxcam/vps/check.sh storage && bash /opt/foxcam/vps/check.sh pipeline'
+```
+
+`--check` is read-only. Provisioning requires `/data` to be mounted. Only on the first install, it removes the approved `/data/mt-data`, `/data/tmp`, and obsolete `agent` account/home, preserving `lost+found` and rejecting unexpected top-level entries. Once `/data/foxcam` exists, destructive initialization is skipped. Provisioning preserves recordings and existing secrets, installs ffmpeg/venv/rsync/cron and the package under `/opt/foxcam`, and stages the hourly cron file there without activating it. It does not install public-facing web services or alter SSH/Fail2ban policy. The restricted Pi key permits only rsync uploads to the incoming directory; arbitrary SSH commands must fail.
+
+The only mode that uses 1Password is the following separate operator step. Run it in the authenticated Mac shell, then relay its result:
+
+```sh
+bash vps/install.sh --secrets
+```
+
+It resolves the three vault references with `op read` inside a child process, quotes their values, and sends them over SSH stdin. No API keys enter arguments, logs, parent-shell exports, or local plaintext files. The VPS atomically replaces `/etc/foxcam.env` as root, mode 600. Before this step, that file contains only the nonsecret template; `check.sh storage` reports `secrets=pending` and `hourly_cron=disabled`. This is a provisioning result, not a claim that real-model processing is ready.
+
+After the operator confirms secrets installation, process the queued real indoor segment and inspect its sidecar, annotation and site before enabling the hourly job:
+
+```sh
+ssh -o BatchMode=yes root@62.238.55.235 'flock -n /run/lock/foxcam.lock /opt/foxcam/vps/run.sh'
+bash vps/install.sh --enable-cron
+```
+
+Activation checks that the required keys are present and reruns the synthetic pipeline/lock check before installing `/etc/cron.d/foxcam`. Its exact schedule is `0 * * * * root /usr/bin/flock -n /run/lock/foxcam.lock /opt/foxcam/vps/run.sh`. The wrapper checks `mountpoint -q /data` before reading config or creating logs; the pipeline additionally requires its data directory to exist and meet `MIN_FREE_GB`. Hourly logs are `/data/foxcam/logs/YYYY-MM-DDTHH-MM-SSZ.log`. Reprovisioning leaves cron activation unchanged. Caddy, cloudflared and Cloudflare Access remain Task 9; do not expose the generated site publicly before that protection is verified.
+
+Provisioning verified on 2026-09-28: approved cleanup freed `/data` from 8.3G available (`df -h`) to 46.40 GiB; a second install preserved the night sentinel checksum. Storage, synthetic pipeline and overlap-lock checks passed. The restricted Pi key rejected `id` and transferred indoor `2026-09-28T16-36-33Z.mp4` (299.7 seconds, 125307516 bytes); SHA-256 `58bc584ea4d7420d6346a4c92bb72741c4a5393020a4796c1daf36445c94fc9f` matched before sync removed the Pi source. The segment awaits processing in `/data/foxcam/incoming`, with 46.28 GiB free. Secrets installation, real-model processing and hourly activation remain pending the operator step above.

@@ -9,7 +9,7 @@ if [[ ! -r $SSH_KEY ]]; then
 else
     # Task 8 restricts this key to rrsync's /data/foxcam/incoming root.
     rsync -a --remove-source-files --exclude='.*' --include='*.mp4' --exclude='*' \
-        -e "ssh -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=10 -p ${SSH_PORT:-22} -i '$SSH_KEY'" \
+        -e "ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 -p ${SSH_PORT:-22} -i '$SSH_KEY'" \
         "$RECORDINGS_DIR/" "$VPS_HOST:./" || status=$?
 fi
 find "$RECORDINGS_DIR" -mtime +7 -delete

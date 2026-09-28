@@ -18,8 +18,6 @@ ssh "${ssh_options[@]}" "$host" bash -s -- "$stage" <<'REMOTE'
 set -euo pipefail
 stage=$1
 source "$stage/foxcam.env"
-# Task 7 must not initiate VPS traffic; its future key must still be absent.
-[[ ! -e $SSH_KEY ]] || { echo 'Transfer key already exists; Task 7 install must not initiate VPS traffic' >&2; exit 1; }
 sudo -n install -d -o root -g root -m 755 /opt/foxcam-pi /etc/systemd/system/foxcam-record.timer.d
 sudo -n install -o root -g root -m 755 "$stage/record.sh" "$stage/sync.sh" "$stage/check.sh" /opt/foxcam-pi/
 sudo -n install -o root -g root -m 644 "$stage/foxcam.env" /etc/foxcam.env
@@ -29,5 +27,5 @@ printf '[Timer]\nOnCalendar=\nOnCalendar=*-*-* %s:00 %s\n' "$START_TIME" "$TZ" |
 sudo -n install -d -o rob -g rob -m 755 "$RECORDINGS_DIR"
 sudo -n systemctl daemon-reload
 sudo -n systemctl enable --now foxcam-record.timer foxcam-sync.timer
-echo 'Installed Pi scripts/config and enabled both timers; transfer key remains absent'
+echo 'Installed Pi scripts/config and enabled both timers'
 REMOTE
