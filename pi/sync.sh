@@ -12,5 +12,5 @@ else
         -e "ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 -p ${SSH_PORT:-22} -i '$SSH_KEY'" \
         "$RECORDINGS_DIR/" "$VPS_HOST:./" || status=$?
 fi
-find "$RECORDINGS_DIR" -mtime +7 -delete
+find "$RECORDINGS_DIR" -mindepth 1 -mtime +7 -delete
 exit "$status"

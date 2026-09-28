@@ -14,6 +14,11 @@ set +a
 
 case "$mode" in
 timers)
+    systemctl is-enabled --quiet systemd-time-wait-sync.service
+    for property in Wants After; do
+        dependencies=$(systemctl show foxcam-record.service -p "$property" --value)
+        [[ " $dependencies " == *' systemd-time-wait-sync.service '* ]]
+    done
     test "$(systemctl show foxcam-record.service -p RestartUSec --value)" = 10s
     test "$(systemctl show foxcam-record.service -p User --value)" = rob
     test "$(systemctl show foxcam-record.service -p KillMode --value)" = control-group
@@ -26,7 +31,7 @@ timers)
     early=$(date -u -d '2026-10-25 01:30:00+01:00' +%Y-%m-%dT%H-%M-%SZ)
     late=$(date -u -d '2026-10-25 01:30:00+00:00' +%Y-%m-%dT%H-%M-%SZ)
     test "$early" != "$late"
-    echo "PASS timers: record=$expression + boot 30s; sync=*:0/15; restart=10s; User=rob; KillMode=control-group; BST/GMT transition and unique UTC names verified"
+    echo "PASS timers: record=$expression + boot 30s; sync=*:0/15; restart=10s; User=rob; KillMode=control-group; time-wait-sync enabled and ordered; BST/GMT transition and unique UTC names verified"
     ;;
 capture|sync-failure)
     test "$EUID" = 0 || { echo 'Run this check with sudo'; exit 1; }
@@ -62,7 +67,13 @@ capture|sync-failure)
         grep -F 'Connection refused' "$work/sync.log" >/dev/null
         test "$before" = "$(sha256sum "$work/recent.mp4")"
         test ! -e "$work/old.mp4"
-        echo "PASS sync-failure: rsync exit=$status; localhost:1 refused; recent checksum unchanged; eight-day-old recording deleted"
+        mkdir "$work/empty-recordings"
+        chown rob:rob "$work/empty-recordings"
+        touch -d '8 days ago' "$work/empty-recordings"
+        runuser -u rob -- env RECORDINGS_DIR="$work/empty-recordings" VPS_HOST=rob@127.0.0.1 SSH_PORT=1 \
+            SSH_KEY="$work/empty-identity" /opt/foxcam-pi/sync.sh > "$work/empty-sync.log" 2>&1 || true
+        test -d "$work/empty-recordings"
+        echo "PASS sync-failure: rsync exit=$status; localhost:1 refused; recent checksum unchanged; eight-day-old recording deleted; old empty RECORDINGS_DIR preserved"
         exit 0
     fi
     systemctl is-active --quiet foxcam-record.service && restore_service=1

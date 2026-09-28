@@ -1,6 +1,7 @@
 [Unit]
 Description=Fox Watch night camera recorder
-After=time-sync.target
+Wants=systemd-time-wait-sync.service
+After=time-sync.target systemd-time-wait-sync.service
 
 [Service]
 Type=simple

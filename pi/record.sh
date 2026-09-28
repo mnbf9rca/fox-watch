@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${START_TIME:?}" "${STOP_TIME:?}" "${TZ:?}" "${SHUTTER_US:?}" "${GAIN:?}" "${RECORDINGS_DIR:?}"
+: "${START_TIME:?}" "${STOP_TIME:?}" "${TZ:?}" "${SHUTTER_US:?}" "${GAIN:?}" "${AWB_GAINS:?}" "${RECORDINGS_DIR:?}"
 export TZ
 once=0
 if [[ ${1:-} == --once && $# == 1 ]]; then once=1
@@ -49,7 +49,8 @@ while :; do
     raw="$RECORDINGS_DIR/.$stamp.$$.h264"
     mp4="$RECORDINGS_DIR/.$stamp.$$.mp4"
     rpicam-vid --nopreview --width 1280 --height 720 --framerate 10 --codec h264 \
-        --inline --intra 10 --timeout "$((seconds * 1000))" --shutter "$SHUTTER_US" --gain "$GAIN" --output "$raw" &
+        --inline --intra 10 --timeout "$((seconds * 1000))" --shutter "$SHUTTER_US" --gain "$GAIN" \
+        --awbgains "$AWB_GAINS" --output "$raw" &
     child=$!
     wait "$child"
     child=''

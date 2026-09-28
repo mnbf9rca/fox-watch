@@ -26,6 +26,7 @@ printf '[Timer]\nOnCalendar=\nOnCalendar=*-*-* %s:00 %s\n' "$START_TIME" "$TZ" |
     sudo -n tee /etc/systemd/system/foxcam-record.timer.d/schedule.conf >/dev/null
 sudo -n install -d -o rob -g rob -m 755 "$RECORDINGS_DIR"
 sudo -n systemctl daemon-reload
+sudo -n systemctl enable --now systemd-time-wait-sync.service
 sudo -n systemctl enable --now foxcam-record.timer foxcam-sync.timer
 echo 'Installed Pi scripts/config and enabled both timers'
 REMOTE
