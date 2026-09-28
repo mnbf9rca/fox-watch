@@ -74,7 +74,7 @@ bash vps/install.sh --provision
 ssh -o BatchMode=yes root@62.238.55.235 'bash /opt/foxcam/vps/check.sh storage && bash /opt/foxcam/vps/check.sh pipeline'
 ```
 
-`--check` is read-only. Provisioning requires `/data` to be mounted. Only on the first install, it removes the approved `/data/mt-data`, `/data/tmp`, and obsolete `agent` account/home, preserving `lost+found` and rejecting unexpected top-level entries. Once `/data/foxcam` exists, destructive initialization is skipped. Provisioning preserves recordings and existing secrets, installs ffmpeg/venv/rsync/cron and the package under `/opt/foxcam`, and stages the hourly cron file there without activating it. It does not install public-facing web services or alter SSH/Fail2ban policy. The restricted Pi key permits only rsync uploads to the incoming directory; arbitrary SSH commands must fail.
+`--check` is read-only. Provisioning requires `/data` to be mounted. Only on the first install, it removes the approved `/data/mt-data`, `/data/tmp`, and obsolete `agent` account/home, preserving `lost+found` and rejecting unexpected top-level entries. Once `/data/foxcam` exists, destructive initialization is skipped. Provisioning preserves recordings and existing secrets, installs ffmpeg/venv/rsync/cron and the package under `/opt/foxcam`, and stages the cron file there without activating it. It does not install public-facing web services or alter SSH/Fail2ban policy. The restricted Pi key permits only rsync uploads to the incoming directory; arbitrary SSH commands must fail.
 
 The only mode that uses 1Password is the following separate operator step. Run it in the authenticated Mac shell, then relay its result:
 
@@ -82,18 +82,18 @@ The only mode that uses 1Password is the following separate operator step. Run i
 bash vps/install.sh --secrets
 ```
 
-It resolves the three vault references with `op read` inside a child process, quotes their values, and sends them over SSH stdin. No API keys enter arguments, logs, parent-shell exports, or local plaintext files. The VPS atomically replaces `/etc/foxcam.env` as root, mode 600. Before this step, that file contains only the nonsecret template; `check.sh storage` reports `secrets=pending` and `hourly_cron=disabled`. This is a provisioning result, not a claim that real-model processing is ready.
+It resolves the three vault references with `op read` inside a child process, quotes their values, and sends them over SSH stdin. No API keys enter arguments, logs, parent-shell exports, or local plaintext files. The VPS atomically replaces `/etc/foxcam.env` as root, mode 600. Before this step, that file contains only the nonsecret template; `check.sh storage` reports `secrets=pending` and `cron=disabled`. This is a provisioning result, not a claim that real-model processing is ready.
 
-After the operator confirms secrets installation, process the queued real indoor segment and inspect its sidecar, annotation and site before enabling the hourly job:
+After the operator confirms secrets installation, process the queued real indoor segment and inspect its sidecar, annotation and site before enabling the cron job:
 
 ```sh
 ssh -o BatchMode=yes root@62.238.55.235 'flock -n /run/lock/foxcam.lock /opt/foxcam/vps/run.sh'
 bash vps/install.sh --enable-cron
 ```
 
-Activation checks that the required keys are present and reruns the synthetic pipeline/lock check before installing `/etc/cron.d/foxcam`. Its exact schedule is `0 * * * * root /usr/bin/flock -n /run/lock/foxcam.lock /opt/foxcam/vps/run.sh`. The wrapper checks `mountpoint -q /data` before reading config or creating logs; the pipeline additionally requires its data directory to exist and meet `MIN_FREE_GB`. Hourly logs are `/data/foxcam/logs/YYYY-MM-DDTHH-MM-SSZ.log`. Reprovisioning leaves cron activation unchanged. Caddy and cloudflared package installation does not enroll a tunnel; complete the Access steps below before publication.
+Activation checks that the required keys are present and reruns the synthetic pipeline/lock check before installing `/etc/cron.d/foxcam`. Its exact schedule is `*/5 * * * * root /usr/bin/flock -n /run/lock/foxcam.lock /opt/foxcam/vps/run.sh`. The wrapper checks `mountpoint -q /data` before reading config or creating logs; the pipeline additionally requires its data directory to exist and meet `MIN_FREE_GB`. Run logs are `/data/foxcam/logs/YYYY-MM-DDTHH-MM-SSZ.log`. Reprovisioning leaves cron activation unchanged. Caddy and cloudflared package installation does not enroll a tunnel; complete the Access steps below before publication.
 
-Provisioning verified on 2026-09-28: approved cleanup freed `/data` from 8.3G available (`df -h`) to 46.40 GiB; a second install preserved the night sentinel checksum. Storage, synthetic pipeline and overlap-lock checks passed. The restricted Pi key rejected `id` and transferred indoor `2026-09-28T16-36-33Z.mp4` (299.7 seconds, 125307516 bytes); SHA-256 `58bc584ea4d7420d6346a4c92bb72741c4a5393020a4796c1daf36445c94fc9f` matched before sync removed the Pi source. At that checkpoint the segment awaited processing, secrets were pending and hourly cron was disabled. The operator subsequently installed secrets and ran the pipeline; generated indoor night pages/media are now present and cron is installed. Task 9 leaves that processing configuration unchanged.
+Provisioning verified on 2026-09-28: approved cleanup freed `/data` from 8.3G available (`df -h`) to 46.40 GiB; a second install preserved the night sentinel checksum. Storage, synthetic pipeline and overlap-lock checks passed. The restricted Pi key rejected `id` and transferred indoor `2026-09-28T16-36-33Z.mp4` (299.7 seconds, 125307516 bytes); SHA-256 `58bc584ea4d7420d6346a4c92bb72741c4a5393020a4796c1daf36445c94fc9f` matched before sync removed the Pi source. At that checkpoint the segment awaited processing, secrets were pending and cron was disabled. The operator subsequently installed secrets and ran the pipeline; generated indoor night pages/media are now present and cron is installed. Task 9 leaves that processing configuration unchanged.
 
 ## Local serving and private publication
 

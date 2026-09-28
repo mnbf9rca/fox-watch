@@ -106,7 +106,7 @@ for model in load_config()['MODELS']:
 PY
 bash /opt/foxcam/vps/check.sh pipeline
 install -o root -g root -m 644 /opt/foxcam/vps/foxcam.cron /etc/cron.d/foxcam
-echo 'Enabled hourly Fox Watch cron'
+echo 'Enabled 5-minute Fox Watch cron'
 REMOTE
     exit
     ;;
@@ -192,5 +192,5 @@ chmod 600 /root/.ssh/authorized_keys
 # Apply strict host checking to the existing Pi sync script without changing its config.
 scp "${ssh_options[@]}" "$root/pi/sync.sh" "$pi:/home/rob/foxcam-sync.install"
 ssh "${ssh_options[@]}" "$pi" 'sudo -n install -o root -g root -m 755 /home/rob/foxcam-sync.install /opt/foxcam-pi/sync.sh && rm /home/rob/foxcam-sync.install'
-echo 'Provisioned VPS and restricted Pi transfer; secrets step and hourly cron activation remain separate'
+echo 'Provisioned VPS and restricted Pi transfer; secrets step and cron activation remain separate'
 install_serving

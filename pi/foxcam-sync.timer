@@ -2,7 +2,7 @@
 Description=Transfer Fox Watch recordings every fifteen minutes
 
 [Timer]
-OnCalendar=*:0/15
+OnCalendar=*:0/10
 Persistent=true
 Unit=foxcam-sync.service
 

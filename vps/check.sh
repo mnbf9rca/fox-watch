@@ -25,7 +25,7 @@ storage)
     command -v ffmpeg ffprobe rsync >/dev/null
     test "$(command -v rrsync)" = /usr/bin/rrsync
     systemctl is-active --quiet cron
-    expected='0 * * * * root /usr/bin/flock -n /run/lock/foxcam.lock /opt/foxcam/vps/run.sh'
+    expected='*/5 * * * * root /usr/bin/flock -n /run/lock/foxcam.lock /opt/foxcam/vps/run.sh'
     test "$(cat /opt/foxcam/vps/foxcam.cron)" = "$expected"
     cron_state=disabled
     if [[ -e /etc/cron.d/foxcam ]]; then
@@ -48,7 +48,7 @@ assert free > 10, free
 print(f'{free:.2f}')
 PY
     )
-    echo "PASS storage: /data mounted; directories=4; env=600; package/tools/cron=OK; secrets=$secrets; hourly_cron=$cron_state; free=${free}GiB"
+    echo "PASS storage: /data mounted; directories=4; env=600; package/tools/cron=OK; secrets=$secrets; cron=$cron_state; free=${free}GiB"
     ;;
 pipeline)
     /opt/foxcam/.venv/bin/python /opt/foxcam/tests/check_pipeline.py

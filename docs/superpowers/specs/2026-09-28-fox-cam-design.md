@@ -21,7 +21,7 @@ Approach C: the Pi is a dumb recorder. All detection, tracking, classification a
 
 ```
 Pi: rpicam-vid (dusk to dawn, 5 min files) -> rsync every 15 min -> VPS /data/foxcam/incoming
-VPS hourly cron under flock: scan -> cut -> track -> classify -> annotate -> site
+VPS cron every 5 minutes under flock: scan -> cut -> track -> classify -> annotate -> site
 Caddy (localhost) -> cloudflared tunnel -> Cloudflare Access -> browser
 ```
 
@@ -31,7 +31,7 @@ Files: `pi/record.sh`, `pi/foxcam-record.service`, `pi/foxcam-record.timer`, `pi
 
 - `record.sh` runs `rpicam-vid` at 1280x720, 10 frames per second, H.264, segmented into 5 minute files named by UTC timestamp, for example `2026-09-28T19-05-00Z.mp4`. It writes to a temporary name and renames on segment close so rsync only sees complete files. Exposure and gain are fixed values from `foxcam.env`, set once by eye against the flood; auto exposure is off so the background subtractor sees a stable image.
 - The record timer starts the service at `START_TIME` and stops it at `STOP_TIME` (fixed local times in `foxcam.env`). Sunset tables are out of scope.
-- The sync timer runs every 15 minutes: `rsync --remove-source-files` from the recordings folder to `VPS_HOST:/data/foxcam/incoming/`. A file is deleted from the Pi only after the VPS confirms it.
+- The sync timer runs every 10 minutes: `rsync --remove-source-files` from the recordings folder to `VPS_HOST:/data/foxcam/incoming/`. A file is deleted from the Pi only after the VPS confirms it.
 - A daily job deletes recordings older than 7 days as the safety valve against a full SD card when the VPS is unreachable.
 - systemd restarts the recorder 10 seconds after a crash.
 - `install.sh` runs from the Mac over SSH: copies the files, installs the units, enables the timers.
@@ -60,7 +60,7 @@ Sidecar JSON fields: `clip`, `night`, `start_utc`, `duration_s`, `entry_edge`, `
 
 Config: one `/etc/foxcam.env` holding `NOUS_API_KEY`, `DEEPINFRA_API_KEY`, `TOGETHER_API_KEY`, `MODELS` (comma separated `provider/model-id`), `PRIMARY_MODEL`, `DATA_DIR`, `MIN_BLOB_AREA`, `GAP_SECONDS`, `PAD_SECONDS`, `EDGE_MARGIN`, `RETAIN_NIGHTS` (default 180), `MIN_FREE_GB` (default 10). On the Mac, secrets are never exported into the shell: `.envrc` loads only a 1Password service account token, and commands run as `op run --env-file=.env.tpl -- ...` so keys exist only inside that child process. `.env.tpl` maps each variable to its vault reference: `op://foxwatch/nous/secret`, `op://foxwatch/deepinfra/api-key`, `op://foxwatch/together/api-key`. The VPS install script resolves the same references once with `op read` on the Mac and writes `/etc/foxcam.env` over SSH, mode 600.
 
-Entry point: `python -m foxcam run [--night YYYY-MM-DD] [--data DIR]`. Cron runs it hourly under `flock -n` so overlapping runs are impossible and a slow run simply delays the next; it processes whatever is in `incoming` and updates the current night's page incrementally. It refuses to start if the data volume has under `MIN_FREE_GB` free and logs why. After processing it deletes raw clips older than `RETAIN_NIGHTS`; annotated clips, frames and sidecars are kept.
+Entry point: `python -m foxcam run [--night YYYY-MM-DD] [--data DIR]`. Cron runs it every 5 minutes under `flock -n` so overlapping runs are impossible and a slow run simply delays the next; it processes whatever is in `incoming` and updates the current night's page incrementally. It refuses to start if the data volume has under `MIN_FREE_GB` free and logs why. After processing it deletes raw clips older than `RETAIN_NIGHTS`; annotated clips, frames and sidecars are kept.
 
 ## Serving
 
