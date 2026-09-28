@@ -56,6 +56,9 @@ def check(data, live=False):
                    DEEPINFRA_API_KEY="local-check-no-secret")
     models = env["MODELS"].split(",")
     primary = env["PRIMARY_MODEL"]
+    missing = data / "missing-data"
+    assert cli(missing, env, "run").returncode != 0
+    assert not missing.exists()
     incoming = data / "incoming"
     incoming.mkdir(parents=True)
     stamp = datetime.now(timezone.utc).replace(hour=20, minute=5, second=0, microsecond=0)
@@ -143,8 +146,14 @@ def check(data, live=False):
     shutil.copyfile(fixture, valid)
     result = cli(data, env, "run")
     assert result.returncode != 0 and broken.exists() and not valid.exists()
+    assert f"Cannot decode video: {broken}" in result.stderr
     assert (sidecar.parent / "22-05-08.json").exists()
     broken.unlink()
+    malformed = sidecar.parent / "malformed.json"
+    malformed.write_text("{")
+    result = cli(data, env, "run")
+    assert result.returncode != 0 and "Expecting property name" in result.stderr
+    malformed.unlink()
     # Empty recordings and explicit empty nights still publish pages.
     blank = incoming / stamp.replace(hour=23).strftime("%Y-%m-%dT%H-%M-%SZ.mp4")
     make_video(blank, moving=False)
@@ -186,7 +195,9 @@ def check(data, live=False):
     old_row = json.loads(old_sidecar.read_text())
     old_row["labels"][MODEL] = {"label": "bird", "confidence": 0.8}
     old_sidecar.write_text(json.dumps(old_row))
+    archived_media = media_state(old_dir)
     passed(cli(data, env, "run"))
+    assert media_state(old_dir) == archived_media
     assert json.loads(old_sidecar.read_text())["annotation_label"] == ["bird", 0.8]
     assert not old_clip.exists()
     playable(old_dir / annotated.name)

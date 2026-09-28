@@ -76,10 +76,7 @@ def run(data_dir: Path, night: str | None = None) -> None:
             raise ValueError(f"Missing {provider.upper()}_API_KEY")
         name = provider.upper() + "_BASE_URL"
         os.environ.setdefault(name, config[name])
-    existing = data_dir.resolve()
-    while not existing.exists():
-        existing = existing.parent
-    if shutil.disk_usage(existing).free / 1024**3 < config["MIN_FREE_GB"]:
+    if shutil.disk_usage(data_dir).free / 1024**3 < config["MIN_FREE_GB"]:
         raise RuntimeError("Free space is below MIN_FREE_GB")
     incoming, nights = data_dir / "incoming", data_dir / "nights"
     incoming.mkdir(parents=True, exist_ok=True)
@@ -121,7 +118,7 @@ def run(data_dir: Path, night: str | None = None) -> None:
             if complete:
                 source.unlink()
         except Exception as exc:
-            logging.error("Input %s: %s", source.name, type(exc).__name__)
+            logging.error("Input %s: %s: %s", source.name, type(exc).__name__, exc)
             failures += 1
     cutoff = datetime.now(config["TZ"]).date() - timedelta(days=config["RETAIN_NIGHTS"])
     for sidecar in sorted(nights.glob("*/*.json")):
@@ -142,18 +139,21 @@ def run(data_dir: Path, night: str | None = None) -> None:
             primary = row["labels"][config["PRIMARY_MODEL"]]
             desired = [primary["label"], primary["confidence"]]
             if not annotated.exists() or row.get("annotation_label") != desired:
-                temporary = annotated.with_name("." + annotated.stem + ".refresh.mp4")
-                temporary.unlink(missing_ok=True)
-                # Expired raw clips can still refresh their caption from the retained annotation.
-                annotate(clip if clip.exists() else annotated, temporary, row["track"], *desired)
-                os.replace(temporary, annotated)
+                if clip.exists():
+                    temporary = annotated.with_name("." + annotated.stem + ".refresh.mp4")
+                    temporary.unlink(missing_ok=True)
+                    annotate(clip, temporary, row["track"], *desired)
+                    os.replace(temporary, annotated)
+                elif not annotated.exists():
+                    raise FileNotFoundError(f"Missing raw and annotated clip: {clip}")
+                # Expired raw: preserve the existing video and acknowledge the desired label.
                 row["annotation_label"] = desired
                 _save(sidecar, row)
             if (date.fromisoformat(row["night"]) < cutoff
                     and all(row["labels"][model]["label"] != "unclassified" for model in config["MODELS"])):
                 clip.unlink(missing_ok=True)
         except Exception as exc:
-            logging.error("Sidecar %s: %s", sidecar, type(exc).__name__)
+            logging.error("Sidecar %s: %s: %s", sidecar, type(exc).__name__, exc)
             failures += 1
     build_site(data_dir, config["PRIMARY_MODEL"])
     if failures:
