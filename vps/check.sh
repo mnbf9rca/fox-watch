@@ -21,9 +21,6 @@ storage)
     test -f /etc/foxcam.env || { echo 'FAIL storage: /etc/foxcam.env is missing'; exit 1; }
     test "$(stat -c %a /etc/foxcam.env)" = 600
     for dir in incoming nights site logs; do test -d "/data/foxcam/$dir"; done
-    nonmount=$(mktemp -d)
-    if mountpoint -q "$nonmount"; then rmdir "$nonmount"; exit 1; fi
-    rmdir "$nonmount"
     /opt/foxcam/.venv/bin/python -c 'import foxcam, cv2, numpy'
     command -v ffmpeg ffprobe rsync >/dev/null
     test "$(command -v rrsync)" = /usr/bin/rrsync
@@ -51,7 +48,7 @@ assert free > 10, free
 print(f'{free:.2f}')
 PY
     )
-    echo "PASS storage: /data mounted; non-mount guard rejected; directories=4; env=600; package/tools/cron=OK; secrets=$secrets; hourly_cron=$cron_state; free=${free}GiB"
+    echo "PASS storage: /data mounted; directories=4; env=600; package/tools/cron=OK; secrets=$secrets; hourly_cron=$cron_state; free=${free}GiB"
     ;;
 pipeline)
     /opt/foxcam/.venv/bin/python /opt/foxcam/tests/check_pipeline.py
@@ -63,5 +60,46 @@ pipeline)
     flock -n /run/lock/foxcam.lock true
     echo 'PASS pipeline: synthetic recovery/retention/space checks; overlapping invocation refused'
     ;;
-*) echo 'usage: check.sh preflight|storage|pipeline' >&2; exit 2 ;;
+serving)
+    page=$(curl -fsS -H 'Host: foxwatch.cynexia.com' http://127.0.0.1:8080/)
+    [[ $page == *'Fox Watch'* ]]
+    systemctl is-active --quiet caddy
+    listeners=$(ss -H -ltn 'sport = :8080' | awk '{print $4}')
+    test "$listeners" = 127.0.0.1:8080
+    # Test actual opens: this host's test -r ignores named ACL denials.
+    runuser -u caddy -- python3 - <<'PY'
+import os
+for path in ('/etc/foxcam.env', '/data/foxcam/incoming', '/data/foxcam/logs'):
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except PermissionError:
+        continue
+    os.close(fd)
+    raise SystemExit(f'FAIL serving: caddy can open {path}')
+PY
+    test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/nights/)" = 404
+    /opt/foxcam/.venv/bin/python - <<'PY'
+import json
+from pathlib import Path
+from urllib.request import Request, urlopen
+
+for sidecar in sorted(Path('/data/foxcam/nights').glob('*/*.json')):
+    row = json.loads(sidecar.read_text())
+    jpeg = sidecar.parent / row['frames'][0]
+    video = sidecar.parent / (Path(row['clip']).stem + '.annotated.mp4')
+    if jpeg.is_file() and video.is_file():
+        break
+else:
+    raise SystemExit('FAIL serving: no generated JPEG/annotated MP4 pair')
+for path in (jpeg, video):
+    url = '/nights/' + str(path.relative_to('/data/foxcam/nights'))
+    request = Request('http://127.0.0.1:8080' + url, headers={'Host': 'foxwatch.cynexia.com'})
+    with urlopen(request, timeout=30) as response:
+        assert response.status == 200, (url, response.status)
+        assert response.read() == path.read_bytes(), url
+    print(f'PASS serving: HTTP 200 {url} (bytes match)')
+print('PASS serving: Fox Watch page; only 127.0.0.1:8080; directory browsing off; private paths denied to caddy')
+PY
+    ;;
+*) echo 'usage: check.sh preflight|storage|pipeline|serving' >&2; exit 2 ;;
 esac

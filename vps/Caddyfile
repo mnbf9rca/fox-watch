@@ -1,0 +1,17 @@
+{
+	admin off
+	auto_https off
+}
+
+http://:8080 {
+	bind 127.0.0.1
+
+	handle_path /nights/* {
+		root * /data/foxcam/nights
+		file_server
+	}
+	handle {
+		root * /data/foxcam/site
+		file_server
+	}
+}

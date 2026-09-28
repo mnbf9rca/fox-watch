@@ -7,7 +7,45 @@ pi=${PI_HOST:-rob@192.168.17.145}
 ssh_options=(-o BatchMode=yes -o ConnectTimeout=10)
 mode=${1:---provision}
 
+install_serving() {
+    rsync -a -e 'ssh -o BatchMode=yes -o ConnectTimeout=10' "$root/vps/" "$host:/opt/foxcam/vps/"
+    ssh "${ssh_options[@]}" "$host" 'bash -s' <<'REMOTE'
+set -euo pipefail
+mountpoint -q /data
+test -d /data/foxcam/site && test -d /data/foxcam/nights
+# Official signed repositories: caddyserver.com/docs/install and pkg.cloudflare.com.
+apt-get update
+DEBIAN_FRONTEND=noninteractive apt-get install -y curl gnupg acl debian-keyring debian-archive-keyring apt-transport-https
+curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/gpg.key |
+    gpg --batch --yes --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt -o /etc/apt/sources.list.d/caddy-stable.list
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg -o /usr/share/keyrings/cloudflare-main.gpg
+echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' > /etc/apt/sources.list.d/cloudflared.list
+chmod 644 /usr/share/keyrings/{caddy-stable-archive-keyring,cloudflare-main}.gpg /etc/apt/sources.list.d/{caddy-stable,cloudflared}.list
+# Ubuntu Pro's ESM priority otherwise selects Ubuntu's Caddy over the official repo.
+printf 'Package: caddy\nPin: origin dl.cloudsmith.io\nPin-Priority: 1001\n' > /etc/apt/preferences.d/foxcam-caddy
+# Put the loopback-only config in place before the package can auto-start Caddy.
+install -d -m 755 /etc/caddy
+install -m 644 /opt/foxcam/vps/Caddyfile /etc/caddy/Caddyfile
+apt-get update
+DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::=--force-confold install -y caddy cloudflared
+setfacl -m u:caddy:--x /data /data/foxcam
+setfacl -m u:caddy:--- /data/foxcam/incoming /data/foxcam/logs
+setfacl -R -m u:caddy:r-X /data/foxcam/site /data/foxcam/nights
+find /data/foxcam/site /data/foxcam/nights -type d -exec setfacl -m d:u:caddy:r-x {} +
+caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+systemctl enable caddy
+# Admin API is disabled, so activate validated files with a restart, not API reload.
+systemctl restart caddy
+echo 'Installed loopback Caddy and cloudflared package; tunnel enrollment and cron unchanged'
+REMOTE
+}
+
 case "$mode" in
+--serving)
+    install_serving
+    exit
+    ;;
 --check)
     exec ssh "${ssh_options[@]}" "$host" 'bash -s -- preflight' < "$root/vps/check.sh"
     ;;
@@ -77,7 +115,7 @@ REMOTE
     exit
     ;;
 --provision) ;;
-*) echo 'usage: install.sh [--check|--provision|--secrets|--enable-cron]' >&2; exit 2 ;;
+*) echo 'usage: install.sh [--check|--provision|--secrets|--enable-cron|--serving]' >&2; exit 2 ;;
 esac
 
 # The read-only preflight rejects unexpected entries before any deletion.
@@ -159,3 +197,4 @@ chmod 600 /root/.ssh/authorized_keys
 scp "${ssh_options[@]}" "$root/pi/sync.sh" "$pi:/home/rob/foxcam-sync.install"
 ssh "${ssh_options[@]}" "$pi" 'sudo -n install -o root -g root -m 755 /home/rob/foxcam-sync.install /opt/foxcam-pi/sync.sh && rm /home/rob/foxcam-sync.install'
 echo 'Provisioned VPS and restricted Pi transfer; secrets step and hourly cron activation remain separate'
+install_serving

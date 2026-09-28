@@ -1,6 +1,6 @@
 # Fox Watch
 
-Offline garden-camera processing for Python 3.12+: scan motion, cut visits, track edges, classify four frames, annotate H.264 clips, and generate static night pages. Requires `ffmpeg` and `ffprobe` on the path. Pi recording and VPS provisioning are installed with the scripts below; hourly processing remains disabled until secrets are confirmed, and private web publishing is a later plan task.
+Offline garden-camera processing for Python 3.12+: scan motion, cut visits, track edges, classify four frames, annotate H.264 clips, and generate static night pages. Requires `ffmpeg` and `ffprobe` on the path. Pi recording, VPS processing, and loopback serving are installed with the scripts below; private publication requires the separate Cloudflare Access and tunnel steps.
 
 ## Local setup and checks
 
@@ -10,6 +10,7 @@ python3 -m venv .venv
 .venv/bin/python -m pytest -q
 .venv/bin/python tests/check_video.py
 .venv/bin/python tests/check_pipeline.py
+.venv/bin/python tests/check_publish.py
 ```
 
 The default pipeline check needs no secrets and never calls a hosted provider: it uses a dummy credential and a refused localhost connection. It exercises the real CLI and video tools, interrupted-work recovery, classification retries, annotation changes, empty nights, input isolation, low-space refusal, retention, and comparison.
@@ -91,6 +92,63 @@ ssh -o BatchMode=yes root@62.238.55.235 'flock -n /run/lock/foxcam.lock /opt/fox
 bash vps/install.sh --enable-cron
 ```
 
-Activation checks that the required keys are present and reruns the synthetic pipeline/lock check before installing `/etc/cron.d/foxcam`. Its exact schedule is `0 * * * * root /usr/bin/flock -n /run/lock/foxcam.lock /opt/foxcam/vps/run.sh`. The wrapper checks `mountpoint -q /data` before reading config or creating logs; the pipeline additionally requires its data directory to exist and meet `MIN_FREE_GB`. Hourly logs are `/data/foxcam/logs/YYYY-MM-DDTHH-MM-SSZ.log`. Reprovisioning leaves cron activation unchanged. Caddy, cloudflared and Cloudflare Access remain Task 9; do not expose the generated site publicly before that protection is verified.
+Activation checks that the required keys are present and reruns the synthetic pipeline/lock check before installing `/etc/cron.d/foxcam`. Its exact schedule is `0 * * * * root /usr/bin/flock -n /run/lock/foxcam.lock /opt/foxcam/vps/run.sh`. The wrapper checks `mountpoint -q /data` before reading config or creating logs; the pipeline additionally requires its data directory to exist and meet `MIN_FREE_GB`. Hourly logs are `/data/foxcam/logs/YYYY-MM-DDTHH-MM-SSZ.log`. Reprovisioning leaves cron activation unchanged. Caddy and cloudflared package installation does not enroll a tunnel; complete the Access steps below before publication.
 
-Provisioning verified on 2026-09-28: approved cleanup freed `/data` from 8.3G available (`df -h`) to 46.40 GiB; a second install preserved the night sentinel checksum. Storage, synthetic pipeline and overlap-lock checks passed. The restricted Pi key rejected `id` and transferred indoor `2026-09-28T16-36-33Z.mp4` (299.7 seconds, 125307516 bytes); SHA-256 `58bc584ea4d7420d6346a4c92bb72741c4a5393020a4796c1daf36445c94fc9f` matched before sync removed the Pi source. The segment awaits processing in `/data/foxcam/incoming`, with 46.28 GiB free. Secrets installation, real-model processing and hourly activation remain pending the operator step above.
+Provisioning verified on 2026-09-28: approved cleanup freed `/data` from 8.3G available (`df -h`) to 46.40 GiB; a second install preserved the night sentinel checksum. Storage, synthetic pipeline and overlap-lock checks passed. The restricted Pi key rejected `id` and transferred indoor `2026-09-28T16-36-33Z.mp4` (299.7 seconds, 125307516 bytes); SHA-256 `58bc584ea4d7420d6346a4c92bb72741c4a5393020a4796c1daf36445c94fc9f` matched before sync removed the Pi source. At that checkpoint the segment awaited processing, secrets were pending and hourly cron was disabled. The operator subsequently installed secrets and ran the pipeline; generated indoor night pages/media are now present and cron is installed. Task 9 leaves that processing configuration unchanged.
+
+## Local serving and private publication
+
+Deploy serving files and packages without touching the Python environment, Pi, provider secrets or cron:
+
+```sh
+bash vps/install.sh --serving
+ssh -o BatchMode=yes root@62.238.55.235 'bash /opt/foxcam/vps/check.sh serving'
+```
+
+Later `--provision` deploys also install these serving files; neither mode runs `publish.sh`. Packages come from the signed [Caddy repository](https://caddyserver.com/docs/install#debian-ubuntu-raspbian) and [Cloudflare repository](https://pkg.cloudflare.com/). Caddy is pinned to its official repository because Ubuntu Pro's ESM priority otherwise selects Ubuntu's build. The package's first start uses the committed Caddyfile, so its default public listener is never used.
+
+Caddy binds only `127.0.0.1:8080`, accepts the tunnel's `foxwatch.cynexia.com` Host header, serves `/data/foxcam/site` at `/` and strips `/nights/` before serving `/data/foxcam/nights`. Directory browsing and the Caddy admin API are off. Configuration is validated before restart. ACLs give `caddy` traverse-only access through the parent directories, read/traverse access to site and nights including future outputs, and deny incoming/logs; `/etc/foxcam.env` remains root-only. No inbound firewall rules or Fail2ban settings are changed. The serving check compares a real JPEG and annotated MP4 with their on-disk bytes; it verifies local service only, not Access protection.
+
+Complete these account-dependent steps in this order:
+
+1. In [Cloudflare Zero Trust → Access controls → Applications](https://one.dash.cloudflare.com/), create or reuse a self-hosted application named **Fox Watch**, with public hostname **foxwatch.cynexia.com**, no path restriction (all paths, including `/nights/*`). Add one **Allow** policy with **Include → Emails → your actual email address**. Choose your identity provider or email one-time PIN. Do not add Everyone, Bypass, or a separate public-media policy; remove conflicting more-specific applications. Save the application before routing the tunnel. Follow [Cloudflare's self-hosted application instructions](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/).
+2. From the Mac, start login on the VPS and open its printed link in your browser; select **cynexia.com** and authorize. The certificate is saved on the VPS, not the Mac:
+
+```sh
+ssh -t root@62.238.55.235 'umask 077; cloudflared tunnel login'
+```
+
+3. After confirming the saved email-only Access policy covers the entire hostname, publish from the VPS:
+
+```sh
+ssh -o BatchMode=yes root@62.238.55.235 'bash /opt/foxcam/vps/publish.sh --access-ready'
+ssh -o BatchMode=yes root@62.238.55.235 'systemctl is-active cloudflared && cloudflared tunnel --config /etc/cloudflared/config.yml ingress validate'
+```
+
+`--access-ready` is the operator's assertion that the policy exists; the script does not create or inspect Access policies. It creates/reuses the locally managed `foxwatch` tunnel, keeps `/etc/cloudflared/foxwatch.json` and `config.yml` root-only, installs its systemd service, and creates/reuses the DNS route. Ingress sends only `foxwatch.cynexia.com` to `http://127.0.0.1:8080`, with a final `http_status:404`. Reruns preserve credentials and refuse conflicting DNS records or an unrelated cloudflared service. If the tunnel already exists but its local credentials were lost, restore those credentials before rerunning; the script never rotates them silently.
+
+If `CLOUDFLARE_API_TOKEN` is already supplied securely in the VPS process environment, browser login is unnecessary. The token needs **Zone → Zone → Read**, **Zone → DNS → Edit** for `cynexia.com`, and **Account → Cloudflare Tunnel → Edit** (also labelled Cloudflare One Connector: cloudflared Write) for its account. The script resolves the account/zone, gives cloudflared a temporary mode-600 origin certificate in its [native credential format](https://github.com/cloudflare/cloudflared/blob/master/credentials/origin_cert.go), and removes that temporary certificate on exit. Token values never enter command arguments or output. Do not put a token literal in shell history or committed files.
+
+4. From the Mac, verify unauthenticated requests return an Access login redirect or denial, never page/media bytes. Do not use `-L`, cookies, or service credentials. Test the actual JPEG/MP4 URLs printed by `check.sh serving`, then open the page in a private browser window and sign in using the allowed email; check labels, arrows, images and H.264 playback:
+
+```sh
+curl -sS -o /dev/null -D - https://foxwatch.cynexia.com/
+curl -sS -o /dev/null -D - https://foxwatch.cynexia.com/nights/2026-09-27/16-37-04.f0.jpg
+curl -sS -o /dev/null -D - https://foxwatch.cynexia.com/nights/2026-09-27/16-37-04.annotated.mp4
+```
+
+A 200/206 response without authentication is a failed privacy check; stop `cloudflared` until the policy is corrected. A missing page, tunnel error or DNS failure is not proof that Access works. Tunnel enrolment, DNS, Access and authenticated browser playback remain unverified until these manual steps succeed. Installing cloudflared alone creates no tunnel.
+
+## Outdoor acceptance and choosing a model
+
+After mounting the camera 2–3 metres high at the fence and offsetting the 850 nm flood from the lens, adjust `SHUTTER_US`, `GAIN`, and fixed `AWB_GAINS` in `pi/foxcam.env` against the actual night view. Keep the near field from clipping, retain detail at the far edge, and keep automatic exposure/white balance off. Reinstall with `bash pi/install.sh`; inspect the first real clips and tune `MIN_BLOB_AREA`, `GAP_SECONDS`, `PAD_SECONDS`, and `EDGE_MARGIN` in the VPS environment as needed.
+
+Walk across the garden patch after dark, allow recording/sync/processing to finish, and inspect the annotated clip, species label, entry/exit edges, and map arrows in the protected page. Synthetic and indoor checks prove mechanics, not outdoor infrared accuracy. Hand-check roughly 200 retained animal frames, then compare model agreement and inspect disagreements before changing `PRIMARY_MODEL`:
+
+```sh
+ssh -o BatchMode=yes root@62.238.55.235 'bash -c "set -a; source /etc/foxcam.env; set +a; exec /opt/foxcam/.venv/bin/python -m foxcam compare --data /data/foxcam"'
+```
+
+Agreement is against the chosen primary, not ground truth. The garden walkthrough and manual animal labels remain hardware acceptance work; no outdoor accuracy is claimed from today's software checks.
+
+Local serving verified on 2026-09-28 with official Caddy 2.11.4 and cloudflared 2026.9.3: Fox Watch page and the two indoor media URLs above passed; both media responses matched disk bytes. Only loopback 8080 was added, directory browsing is off, Caddy cannot read incoming/logs/provider secrets, and SSH/Fail2ban remain active. Serving-only reinstall passed. No tunnel configuration/service was created and `publish.sh` was not run; Access and browser checks remain manual.
