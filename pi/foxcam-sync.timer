@@ -1,0 +1,10 @@
+[Unit]
+Description=Transfer Fox Watch recordings every fifteen minutes
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+Unit=foxcam-sync.service
+
+[Install]
+WantedBy=timers.target

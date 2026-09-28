@@ -1,0 +1,10 @@
+[Unit]
+Description=Transfer completed Fox Watch recordings and expire old files
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=rob
+EnvironmentFile=/etc/foxcam.env
+ExecStart=/opt/foxcam-pi/sync.sh

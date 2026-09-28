@@ -1,0 +1,13 @@
+[Unit]
+Description=Fox Watch night camera recorder
+After=time-sync.target
+
+[Service]
+Type=simple
+User=rob
+EnvironmentFile=/etc/foxcam.env
+ExecStart=/opt/foxcam-pi/record.sh
+Restart=on-failure
+RestartSec=10
+KillMode=control-group
+TimeoutStopSec=15

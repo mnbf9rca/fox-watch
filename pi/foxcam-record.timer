@@ -1,0 +1,11 @@
+[Unit]
+Description=Start Fox Watch recording at boot and each evening
+
+[Timer]
+OnBootSec=30s
+# install.sh adds the configured OnCalendar expression in a drop-in.
+Persistent=true
+Unit=foxcam-record.service
+
+[Install]
+WantedBy=timers.target

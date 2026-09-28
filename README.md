@@ -1,6 +1,6 @@
 # Fox Watch
 
-Offline garden-camera processing for Python 3.12+: scan motion, cut visits, track edges, classify four frames, annotate H.264 clips, and generate static night pages. Requires `ffmpeg` and `ffprobe` on the path. Pi recording, VPS provisioning, scheduling, and private web publishing are later plan tasks.
+Offline garden-camera processing for Python 3.12+: scan motion, cut visits, track edges, classify four frames, annotate H.264 clips, and generate static night pages. Requires `ffmpeg` and `ffprobe` on the path. Pi recording is installed with the scripts below; VPS provisioning, pipeline scheduling, and private web publishing are later plan tasks.
 
 ## Local setup and checks
 
@@ -47,3 +47,19 @@ Existing cuts, frames, and sidecars are reused. Missing or unclassified model la
 The initial values in `vps/foxcam.env.example` are tuning defaults: `MIN_BLOB_AREA=100` at 320-pixel scan width, `EDGE_MARGIN=80` at full resolution, `GAP_SECONDS=3`, `PAD_SECONDS=2`, `START_TIME=19:00`, `STOP_TIME=07:00`, `TZ=Europe/London`, `RETAIN_NIGHTS=180`, and `MIN_FREE_GB=10`. Time settings also drive the later Pi recorder. Tune motion area against noise and animal size, gap against fragmented visits, padding against missed approach/departure, and edge margin against the installed camera view. Edge arrows are schematic, not calibrated ground positions.
 
 The selected models and their observed fixture answers are documented in `tests/fixtures/SOURCES.md`. Together is excluded because its tested serverless option rejects multiple images and its VL alternatives require dedicated endpoints. Its URL and vault reference remain for a future compatible offering. Hosted fixture results do not establish outdoor infrared accuracy: after installation, walk across the patch, inspect the annotated clip and entry/exit edges, then hand-check roughly 200 retained frames before choosing the primary model. Pi/VPS deployment and Cloudflare Access must be verified before serving real footage.
+
+## Pi recorder
+
+From the Mac, `bash pi/install.sh` installs root-owned scripts in `/opt/foxcam-pi`, the nonsecret `pi/foxcam.env` as `/etc/foxcam.env`, and the record/sync systemd units on `rob@192.168.17.145`. It uses key-only SSH and passwordless sudo. Edit the committed Pi config and reinstall to change the schedule or exposure. `START_TIME` and `STOP_TIME` must be distinct HH:MM values; the installer writes the actual start time and `Europe/London` timezone into the record timer drop-in. The recorder starts on its evening timer or after boot, exits successfully outside the recording window, and stops itself at the local stop boundary. Systemd restarts failures after ten seconds and terminates the process group when stopping the service.
+
+Recordings are 1280×720 H.264 at 10 fps, with `--inline --intra 10` for a keyframe every second. The indoor defaults are `SHUTTER_US=20000` and `GAIN=4`; calibrate them with the installed IR flood. Each segment captures at most 300 seconds, or the remaining time before `STOP_TIME`. The raw H.264 and remux output stay hidden until ffmpeg finishes; a final rename publishes a UTC timestamp MP4 under `/home/rob/foxcam-recordings`. Interruption never publishes the partial segment, and existing capture names are never overwritten. There is a short capture gap while each segment remuxes; continuous recording is not claimed.
+
+Sync runs every fifteen minutes, selects only visible MP4s, removes sources only after rsync succeeds, and deletes recordings older than seven days even when transfer fails. The future transfer-key path `/home/rob/.ssh/foxcam_ed25519` is only a placeholder in Task 7. Missing keys cause a local failure before SSH, so no VPS connection occurs yet. Task 8 creates that dedicated key and restricts its receiver to `/data/foxcam/incoming`; `sync.sh` uses destination `VPS_HOST:./` inside that restricted namespace. No VPS key is generated or installed by these Pi scripts. The Task 7 installer refuses an already-present transfer key to prevent unexpected VPS traffic; that safeguard must be revisited when enabling transfer in Task 8.
+
+```sh
+ssh -o BatchMode=yes rob@192.168.17.145 'sudo -n /opt/foxcam-pi/check.sh timers'
+ssh -o BatchMode=yes rob@192.168.17.145 'sudo -n /opt/foxcam-pi/check.sh capture'
+ssh -o BatchMode=yes rob@192.168.17.145 'sudo -n /opt/foxcam-pi/check.sh sync-failure'
+```
+
+The capture check temporarily stops and later restores the recorder/timer, records five minutes as `rob` in a temporary directory, checks codec/size/rate and keyframe spacing, decodes the whole segment, interrupts a second capture, and tests a short scheduled stop boundary. Move something in front of the indoor camera during the five-minute recording; the check verifies recording mechanics, not animal detection. The sync-failure check uses only localhost port 1 and an empty test identity, verifying refusal, an unchanged recent recording, and eight-day cleanup. The timer check covers the October 2026 BST/GMT transition and distinct UTC names during the repeated local hour.
