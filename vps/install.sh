@@ -15,7 +15,7 @@ mountpoint -q /data
 test -d /data/foxcam/site && test -d /data/foxcam/nights
 # Official signed repositories: caddyserver.com/docs/install and pkg.cloudflare.com.
 apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get install -y curl gnupg acl debian-keyring debian-archive-keyring apt-transport-https
+DEBIAN_FRONTEND=noninteractive apt-get install -y curl gnupg debian-keyring debian-archive-keyring apt-transport-https
 curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/gpg.key |
     gpg --batch --yes --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
 curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt -o /etc/apt/sources.list.d/caddy-stable.list
@@ -29,10 +29,6 @@ install -d -m 755 /etc/caddy
 install -m 644 /opt/foxcam/vps/Caddyfile /etc/caddy/Caddyfile
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::=--force-confold install -y caddy cloudflared
-setfacl -m u:caddy:--x /data /data/foxcam
-setfacl -m u:caddy:--- /data/foxcam/incoming /data/foxcam/logs
-setfacl -R -m u:caddy:r-X /data/foxcam/site /data/foxcam/nights
-find /data/foxcam/site /data/foxcam/nights -type d -exec setfacl -m d:u:caddy:r-x {} +
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 systemctl enable caddy
 # Admin API is disabled, so activate validated files with a restart, not API reload.

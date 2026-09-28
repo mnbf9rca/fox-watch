@@ -18,57 +18,18 @@ if [[ -n $unit ]]; then
         echo 'Existing cloudflared service has a different command; left untouched' >&2; exit 1;
     }
 fi
-temporary_cert=''
 temporary_config=''
 cleanup() {
-    [[ -z $temporary_cert ]] || rm -f -- "$temporary_cert"
     [[ -z $temporary_config ]] || rm -f -- "$temporary_config"
 }
 trap cleanup EXIT
 
-if [[ -n ${CLOUDFLARE_API_TOKEN:-} ]]; then
-    temporary_cert=$(mktemp /etc/cloudflared/.api-cert.XXXXXX)
-    # Use cloudflared's native origin-certificate format; the token never enters argv.
-    # https://github.com/cloudflare/cloudflared/blob/master/credentials/origin_cert.go
-    python3 - "$temporary_cert" <<'PY'
-import base64
-import json
-import os
-from pathlib import Path
-import sys
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
-
-token = os.environ['CLOUDFLARE_API_TOKEN'].strip()
-if not token or any(c in token for c in '\r\n\0'):
-    raise SystemExit('Invalid Cloudflare API token format')
-request = Request('https://api.cloudflare.com/client/v4/zones?name=cynexia.com',
-                  headers={'Authorization': 'Bearer ' + token,
-                           'User-Agent': 'foxcam/0.1'})
-try:
-    with urlopen(request, timeout=30) as response:
-        result = json.load(response)
-except HTTPError as error:
-    raise SystemExit(f'Cloudflare zone lookup failed: HTTP {error.code}') from None
-except URLError:
-    raise SystemExit('Cloudflare zone lookup failed: connection error') from None
-if not result.get('success') or len(result.get('result', [])) != 1:
-    raise SystemExit('Token must see exactly one cynexia.com zone')
-zone = result['result'][0]
-payload = {'zoneID': zone['id'], 'accountID': zone['account']['id'], 'apiToken': token}
-encoded = base64.encodebytes(json.dumps(payload).encode()).decode()
-Path(sys.argv[1]).write_text('-----BEGIN ARGO TUNNEL TOKEN-----\n' + encoded +
-                           '-----END ARGO TUNNEL TOKEN-----\n')
-PY
-    export TUNNEL_ORIGIN_CERT=$temporary_cert
-else
-    export TUNNEL_ORIGIN_CERT=/root/.cloudflared/cert.pem
-    [[ -s $TUNNEL_ORIGIN_CERT ]] || {
-        echo 'Run cloudflared tunnel login on this VPS, authorize cynexia.com in your browser, then rerun this command' >&2
-        exit 1
-    }
-    chmod 600 "$TUNNEL_ORIGIN_CERT"
-fi
+export TUNNEL_ORIGIN_CERT=/root/.cloudflared/cert.pem
+[[ -s $TUNNEL_ORIGIN_CERT ]] || {
+    echo 'Run cloudflared tunnel login on this VPS, authorize cynexia.com in your browser, then rerun this command' >&2
+    exit 1
+}
+chmod 600 "$TUNNEL_ORIGIN_CERT"
 
 tunnel_id=$(cloudflared tunnel list --output json --name foxwatch | python3 -c '
 import json, sys
@@ -102,7 +63,6 @@ print(tunnel_id)
 PY
 )
 chmod 600 /etc/cloudflared/foxwatch.json
-# BEGIN existing-config guard
 if [[ -e /etc/cloudflared/config.yml ]]; then
     if ! grep -Fxq "tunnel: $tunnel_id" /etc/cloudflared/config.yml ||
        ! grep -Fxq 'credentials-file: /etc/cloudflared/foxwatch.json' /etc/cloudflared/config.yml; then
@@ -110,7 +70,6 @@ if [[ -e /etc/cloudflared/config.yml ]]; then
         exit 1
     fi
 fi
-# END existing-config guard
 temporary_config=$(mktemp /etc/cloudflared/.config.XXXXXX)
 cat > "$temporary_config" <<CONFIG
 tunnel: $tunnel_id

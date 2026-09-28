@@ -66,17 +66,6 @@ serving)
     systemctl is-active --quiet caddy
     listeners=$(ss -H -ltn 'sport = :8080' | awk '{print $4}')
     test "$listeners" = 127.0.0.1:8080
-    # Test actual opens: this host's test -r ignores named ACL denials.
-    runuser -u caddy -- python3 - <<'PY'
-import os
-for path in ('/etc/foxcam.env', '/data/foxcam/incoming', '/data/foxcam/logs'):
-    try:
-        fd = os.open(path, os.O_RDONLY)
-    except PermissionError:
-        continue
-    os.close(fd)
-    raise SystemExit(f'FAIL serving: caddy can open {path}')
-PY
     test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/nights/)" = 404
     /opt/foxcam/.venv/bin/python - <<'PY'
 import json
@@ -98,7 +87,7 @@ for path in (jpeg, video):
         assert response.status == 200, (url, response.status)
         assert response.read() == path.read_bytes(), url
     print(f'PASS serving: HTTP 200 {url} (bytes match)')
-print('PASS serving: Fox Watch page; only 127.0.0.1:8080; directory browsing off; private paths denied to caddy')
+print('PASS serving: Fox Watch page; only 127.0.0.1:8080; directory browsing off')
 PY
     ;;
 *) echo 'usage: check.sh preflight|storage|pipeline|serving' >&2; exit 2 ;;
