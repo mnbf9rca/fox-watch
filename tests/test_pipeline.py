@@ -7,6 +7,26 @@ import pytest
 from foxcam import pipeline
 
 
+def test_sidecar_loader_repairs_day_from_folder(tmp_path, caplog):
+    directory = tmp_path / "nights/2026-09-29"
+    directory.mkdir(parents=True)
+    sidecar = directory / "23-30-00.json"
+    row = dict(clip="23-30-00.mp4", night="2026-09-28", start_utc="2026-09-28T23:30:00Z",
+               duration_s=1, labels={}, track=[], tracks=[], entry_edge="unknown", exit_edge="unknown",
+               frames=[f"23-30-00.f{i}.jpg" for i in range(4)])
+    sidecar.write_text(json.dumps(row))
+    loaded = pipeline.read_sidecar(sidecar, "nous/a")
+    assert loaded == row | {"night": directory.name}
+    assert str(sidecar) in caplog.text and "2026-09-28" in caplog.text and "2026-09-29" in caplog.text
+    assert json.loads(sidecar.read_text()) == loaded
+    # Repair must not bypass the existing media-reference validation.
+    row["frames"][0] = "../outside.jpg"
+    sidecar.write_text(json.dumps(row))
+    with pytest.raises(ValueError):
+        pipeline.read_sidecar(sidecar, "nous/a")
+    assert json.loads(sidecar.read_text()) == row
+
+
 @pytest.mark.parametrize("minimum", ["0.75", "1.2", "-1", "nan", "inf"])
 def test_minimum_track_move_config(monkeypatch, minimum):
     monkeypatch.setenv("MODELS", "nous/a")

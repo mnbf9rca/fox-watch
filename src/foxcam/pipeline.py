@@ -68,10 +68,15 @@ def _save(path, row):
 
 def read_sidecar(path: Path, primary_model: str) -> dict:
     row = json.loads(path.read_text())
+    stored_day = row["night"]
+    row["night"] = path.parent.name
     # Reuse the renderer's schema/path checks before following any media references.
     render_night(path.parent.name, [row], primary_model)
     if row["clip"] != path.stem + ".mp4" or row["frames"] != [f"{path.stem}.f{i}.jpg" for i in range(4)]:
         raise ValueError("Sidecar media names do not match its basename")
+    if stored_day != row["night"]:
+        logging.warning("Sidecar %s: day %s differs from folder %s; using folder", path, stored_day, row["night"])
+        _save(path, row)
     return row
 
 
@@ -104,9 +109,9 @@ def refile(data_dir: Path) -> int:
         for source in files[:-1]:
             if source.exists():  # Raw clips may already have expired.
                 os.replace(source, directory / source.name)
-        row["night"] = directory.name
-        _save(sidecar, row)
         os.replace(sidecar, directory / sidecar.name)
+        row["night"] = directory.name
+        _save(directory / sidecar.name, row)
     build_site(data_dir, config["PRIMARY_MODEL"])
     return len(planned)
 
