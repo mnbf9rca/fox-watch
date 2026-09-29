@@ -103,6 +103,13 @@ def check(data, live=False):
     passed(comparison)
     assert f"{MODEL}: 0/0 (n/a)" in comparison.stdout
     first_media = media_state(data / "nights")
+    # Upgrade annotations from the primary-only renderer even when labels match.
+    row.pop("annotation_version", None)
+    sidecar.write_text(json.dumps(row))
+    passed(cli(data, env, "run"))
+    assert json.loads(sidecar.read_text())["annotation_version"] == 2
+    assert media_state(data / "nights") != first_media
+    first_media = media_state(data / "nights")
     second_run = cli(data, env, "run")
     passed(second_run)
     assert MODEL in second_run.stderr and "URLError" in second_run.stderr

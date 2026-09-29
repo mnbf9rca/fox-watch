@@ -1,7 +1,12 @@
 import json
 
 import pytest
-from foxcam.site import build_site, render_index, render_night
+from foxcam.classify import LABELS
+from foxcam.site import PALETTE, build_site, render_index, render_night
+
+
+def test_palette_covers_every_label():
+    assert set(LABELS) <= PALETTE.keys()
 
 def test_pages_from_sidecars():
     visit = dict(clip="19-05-00.mp4", night="2026-09-28", start_utc="2026-09-28T19:05:00Z",
@@ -18,6 +23,21 @@ def test_pages_from_sidecars():
     visit["labels"]["<script>"] = {"label": "none", "confidence": 0}
     assert "<script>" not in render_night("2026-09-28", [visit], "nous/a")
     assert "unclassified" in render_night("2026-09-28", [visit], "nous/missing")
+    visit["tracks"] = [dict(id=0, class_="dog", labels={"nous/a": {"label": "dog", "confidence": 0.8}},
+                            description="a dog trotting <outside>", entry_edge="left", exit_edge="far",
+                            boxes=[[0, 0, 50, 20, 20]]),
+                       dict(id=1, class_="person", labels={"nous/a": {"label": "person", "confidence": 1.0}},
+                            description="", entry_edge="right", exit_edge="left", boxes=[[0, 500, 50, 20, 60]])]
+    for item in visit["tracks"]:
+        item["class"] = item.pop("class_")
+    html = render_night("2026-09-28", [visit], "nous/a")
+    assert html.count("marker-end") == 2 and "a dog trotting &lt;outside&gt;" in html
+    assert 'id="label-fox"' in html and "fox (1)" in html and 'class="label-fox"' in html
+    assert "#label-fox:not(:checked) ~ .visits > .label-fox" in html
+    assert "dog (80%)" in html and "person (100%)" in html and "<script>" not in html
+    assert "fox (2)" in render_night("2026-09-28", [visit, visit], "nous/a")
+    visit["tracks"] = []
+    assert render_night("2026-09-28", [visit], "nous/a").count("marker-end") == 1
     visit["clip"] = "../secret.mp4"
     with pytest.raises(ValueError):
         render_night("2026-09-28", [visit], "nous/a")

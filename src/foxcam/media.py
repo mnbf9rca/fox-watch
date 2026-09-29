@@ -156,9 +156,10 @@ def track(clip: Path, min_blob_area: float, edge_margin: float) -> dict:
         video.release()
 
 
-def annotate(
-    clip: Path, target: Path, boxes: list[list[int]], label: str, confidence: float
-) -> None:
+TRACK_COLOURS = ((0, 255, 0), (255, 128, 0), (0, 128, 255), (255, 0, 255), (0, 255, 255))
+
+
+def annotate(clip: Path, target: Path, tracks: list[dict], captions: list[str]) -> None:
     if target.exists():
         return
     video = cv2.VideoCapture(str(clip))
@@ -170,8 +171,10 @@ def annotate(
         fps = video.get(cv2.CAP_PROP_FPS)
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary = target.with_name(f".{target.stem}.tmp.mp4")
-        by_frame = {frame: (x, y, w, h) for frame, x, y, w, h in boxes}
-        points = []
+        by_frame = [{frame: (x, y, w, h) for frame, x, y, w, h in item["boxes"]} for item in tracks]
+        points = [[] for _ in tracks]
+        held = [None for _ in tracks]
+        last = [max(boxes, default=-1) for boxes in by_frame]
         frame = 0
         with subprocess.Popen(
             ["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24",
@@ -180,16 +183,22 @@ def annotate(
             stdin=subprocess.PIPE,
         ) as encoder:
             while ok:
-                if frame in by_frame:
-                    x, y, w, h = by_frame[frame]
-                    cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                    points.append((x + w // 2, y + h // 2))
-                # ponytail: redraw short clip paths; cache an overlay if long clips become costly.
-                if len(points) > 1:
-                    cv2.polylines(image, [np.asarray(points, dtype=np.int32)], False, (0, 255, 255), 2)
-                cv2.rectangle(image, (0, 0), (280, 44), (0, 0, 0), -1)
-                cv2.putText(image, f"{label} {confidence:.0%}", (12, 32),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2, cv2.LINE_AA)
+                for i, boxes in enumerate(by_frame):
+                    colour = TRACK_COLOURS[tracks[i]["id"] % len(TRACK_COLOURS)]
+                    if frame in boxes:
+                        held[i] = boxes[frame]
+                        x, y, w, h = held[i]
+                        points[i].append((x + w // 2, y + h // 2))
+                    if held[i] is not None and frame <= last[i]:
+                        x, y, w, h = held[i]
+                        cv2.rectangle(image, (x, y), (x + w, y + h), colour, 2)
+                        origin = (max(0, min(x, width - 200)), max(24, min(y - 8, height - 8)))
+                        for ink, thickness in (((0, 0, 0), 4), (colour, 2)):
+                            cv2.putText(image, captions[i], origin, cv2.FONT_HERSHEY_SIMPLEX,
+                                        0.7, ink, thickness, cv2.LINE_AA)
+                    # ponytail: redraw short clip paths; cache an overlay if long clips become costly.
+                    if len(points[i]) > 1:
+                        cv2.polylines(image, [np.asarray(points[i], dtype=np.int32)], False, colour, 2)
                 encoder.stdin.write(image.tobytes())
                 frame += 1
                 ok, image = video.read()

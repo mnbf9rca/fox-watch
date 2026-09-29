@@ -12,15 +12,16 @@ from foxcam.classify import parse_answer
 
 PALETTE = dict(fox="#a84300", hedgehog="#626400", cat="#7051a1", badger="#333333",
                rat="#755139", mouse="#846451", bird="#176b9b", deer="#856000",
+               dog="#9b5100", person="#126451", vehicle="#2549a0",
                other="#006c67", none="#546e7a", unclassified="#777777")
 EDGES = dict(far=(50, 0), fence=(50, 100), left=(0, 50), right=(100, 50), unknown=(50, 50))
 
 
-def _page(title, body):
+def _page(title, body, css=""):
     return f'''<!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fox Watch — {escape(title)}</title>
-<style>body{{font:1rem system-ui;max-width:70rem;margin:auto;padding:1rem;background:#fff;color:#222}}a{{color:#125e96}}.visits{{display:grid;grid-template-columns:repeat(auto-fit,minmax(18rem,1fr));gap:1rem}}article{{border:1px solid #bbb;padding:1rem}}img{{width:100%}}svg{{width:100%;max-width:30rem}}li{{margin:.4rem 0}}</style>
+<style>body{{font:1rem system-ui;max-width:70rem;margin:auto;padding:1rem;background:#fff;color:#222}}a{{color:#125e96}}.visits{{display:grid;grid-template-columns:repeat(auto-fit,minmax(18rem,1fr));gap:1rem}}article{{border:1px solid #bbb;padding:1rem}}img{{width:100%}}svg{{width:100%;max-width:30rem}}li{{margin:.4rem 0}}main>label{{margin-right:1rem}}{css}</style>
 <body><header><h1>Fox Watch</h1></header><main><h2>{escape(title)}</h2>{body}</main></body></html>'''
 
 
@@ -38,6 +39,7 @@ def render_night(night: str, visits: list[dict], primary_model: str) -> str:
     if date.fromisoformat(night).isoformat() != night:
         raise ValueError("invalid night")
     cards, arrows, legend = [], [], []
+    counts = Counter()
     for number, visit in enumerate(visits, 1):
         if visit["night"] != night or not isinstance(visit["track"], list):
             raise ValueError("invalid sidecar")
@@ -58,6 +60,7 @@ def render_night(night: str, visits: list[dict], primary_model: str) -> str:
         if entry not in EDGES or exit_edge not in EDGES:
             raise ValueError("invalid edge")
         label, confidence = _primary(visit, primary_model)
+        counts[label] += 1
         answers = []
         for model, answer in visit["labels"].items():
             species, score = _answer(answer)
@@ -66,18 +69,33 @@ def render_night(night: str, visits: list[dict], primary_model: str) -> str:
         thumbnail = media + quote(frames[3], safe="")
         video = media + quote(clip.removesuffix(".mp4") + ".annotated.mp4", safe="")
         description = f"Visit {number}: {label}, {when}, {entry} → {exit_edge}"
-        cards.append(f'''<article><h3>Visit {number}: {label} ({confidence:.0%})</h3>
+        track_details = []
+        for index, item in enumerate(visit.get("tracks") or [visit]):
+            species, score = _primary(item, primary_model)
+            start, end = item["entry_edge"], item["exit_edge"]
+            if start not in EDGES or end not in EDGES:
+                raise ValueError("invalid track edge")
+            detail = (f"Visit {number}, track {index + 1}: {item.get('class', 'unknown')} — "
+                      f"{species} ({score:.0%}), {start} → {end}. {item.get('description', '')}")
+            track_details.append(f"<li>{escape(detail)}</li>")
+            x1, y1 = EDGES[start]
+            x2, y2 = EDGES[end]
+            path = f"M {x1} {y1} L {x2} {y2}"
+            if (x1, y1) == (x2, y2):
+                path = f"M {x1} {y1} c -15,-15 15,-15 0,0"
+            color = PALETTE[species]
+            marker = f"arrow-{number}-{index}"
+            arrows.append(f'''<defs><marker id="{marker}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="{color}"/></marker></defs>
+<path d="{path}" fill="none" stroke="{color}" stroke-width="1.5" marker-end="url(#{marker})"><title>{escape(detail)}</title></path>''')
+            legend.append(f'<li><span style="color:{color}" aria-hidden="true">●</span> {escape(detail)}</li>')
+        cards.append(f'''<article class="label-{label}"><h3>Visit {number}: {label} ({confidence:.0%})</h3>
 <a href="{video}"><img src="{thumbnail}" alt="{escape(description)}"><br>Watch annotated clip</a>
-<p>{when} · {duration:g} seconds · {entry} → {exit_edge}</p><ul>{''.join(answers)}</ul></article>''')
-        x1, y1 = EDGES[entry]
-        x2, y2 = EDGES[exit_edge]
-        path = f"M {x1} {y1} L {x2} {y2}"
-        if (x1, y1) == (x2, y2):
-            path = f"M {x1} {y1} c -15,-15 15,-15 0,0"
-        color = PALETTE[label]
-        arrows.append(f'''<defs><marker id="arrow-{number}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="{color}"/></marker></defs>
-<path d="{path}" fill="none" stroke="{color}" stroke-width="1.5" marker-end="url(#arrow-{number})"><title>{escape(description)}</title></path>''')
-        legend.append(f'<li><span style="color:{color}" aria-hidden="true">●</span> {escape(description)}</li>')
+<p>{when} · {duration:g} seconds · {entry} → {exit_edge}</p><ul>{''.join(answers)}</ul>
+<ul aria-label="Tracks">{''.join(track_details)}</ul></article>''')
+    filters = ''.join(f'<input type="checkbox" id="label-{label}" checked><label for="label-{label}">{label} ({count})</label>'
+                      for label, count in sorted(counts.items()))
+    css = ''.join(f'#label-{label}:not(:checked) ~ .visits > .label-{label} {{ display: none }}'
+                  for label in counts)
     content = f'''<p><a href="index.html">All nights</a> · Primary model: {escape(primary_model)}</p>
 <svg viewBox="-20 -20 140 140" role="img" aria-labelledby="map-title map-description">
 <title id="map-title">8 × 8 metre garden patch</title><desc id="map-description">Entry-to-exit arrows; visit details in the legend below. Unknown endpoints are drawn at the centre. These are schematic edges, not calibrated positions.</desc>
@@ -85,8 +103,9 @@ def render_night(night: str, visits: list[dict], primary_model: str) -> str:
 <g font-size="5" text-anchor="middle"><text x="50" y="-5">far</text><text x="50" y="110">fence</text><text x="-10" y="50">left</text><text x="110" y="50">right</text></g>{''.join(arrows)}</svg>
 <p>Unknown endpoints use the centre; arrows show schematic edges, not calibrated positions.</p>
 <ul aria-label="Visit map legend">{''.join(legend)}</ul>
+<p>Show visits by primary label:</p>{filters}
 <div class="visits">{''.join(cards) if cards else '<p>No visits recorded</p>'}</div>'''
-    return _page(night, content)
+    return _page(night, content, css)
 
 
 def render_index(nights: dict[str, list[dict]], primary_model: str) -> str:
