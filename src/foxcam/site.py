@@ -1,11 +1,13 @@
 from collections import Counter
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 from html import escape
 import json
 import logging
 import math
+import os
 from pathlib import Path
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 from foxcam.classify import parse_answer
 
@@ -38,8 +40,11 @@ def _primary(visit, model):
 def render_night(night: str, visits: list[dict], primary_model: str) -> str:
     if date.fromisoformat(night).isoformat() != night:
         raise ValueError("invalid night")
-    cards, arrows, legend = [], [], []
+    cards, arrows, legend = {}, [], []
     counts = Counter()
+    zone = ZoneInfo(os.environ.get("TZ", "Europe/London"))
+    stop_time = time.fromisoformat(os.environ.get("STOP_TIME", "07:00"))
+    start_time = time.fromisoformat(os.environ.get("START_TIME", "19:00"))
     for number, visit in enumerate(visits, 1):
         if visit["night"] != night or not isinstance(visit["track"], list):
             raise ValueError("invalid sidecar")
@@ -56,10 +61,16 @@ def render_night(night: str, visits: list[dict], primary_model: str) -> str:
         if stamp.tzinfo is None:
             raise ValueError("timestamp must have a timezone")
         when = stamp.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        local = stamp.astimezone(zone)
+        daytime = (stop_time <= local.time() < start_time if stop_time < start_time
+                   else not start_time <= local.time() < stop_time)
+        hour = local.replace(minute=0, second=0, microsecond=0).astimezone(timezone.utc)
         entry, exit_edge = visit["entry_edge"], visit["exit_edge"]
         if entry not in EDGES or exit_edge not in EDGES:
             raise ValueError("invalid edge")
-        label, confidence = _primary(visit, primary_model)
+        tracks = visit.get("tracks") or [visit]
+        track_answers = [_primary(item, primary_model) for item in tracks]
+        label, _ = max(track_answers, key=lambda answer: {"none": 0, "unclassified": 0, "vehicle": 1, "person": 2}.get(answer[0], 3))
         counts[label] += 1
         answers = []
         for model, answer in visit["labels"].items():
@@ -70,8 +81,8 @@ def render_night(night: str, visits: list[dict], primary_model: str) -> str:
         video = media + quote(clip.removesuffix(".mp4") + ".annotated.mp4", safe="")
         description = f"Visit {number}: {label}, {when}, {entry} → {exit_edge}"
         track_details = []
-        for index, item in enumerate(visit.get("tracks") or [visit]):
-            species, score = _primary(item, primary_model)
+        for index, item in enumerate(tracks):
+            species, score = track_answers[index]
             start, end = item["entry_edge"], item["exit_edge"]
             if start not in EDGES or end not in EDGES:
                 raise ValueError("invalid track edge")
@@ -88,23 +99,28 @@ def render_night(night: str, visits: list[dict], primary_model: str) -> str:
             arrows.append(f'''<defs><marker id="{marker}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="{color}"/></marker></defs>
 <path d="{path}" fill="none" stroke="{color}" stroke-width="1.5" marker-end="url(#{marker})"><title>{escape(detail)}</title></path>''')
             legend.append(f'<li><span style="color:{color}" aria-hidden="true">●</span> {escape(detail)}</li>')
-        cards.append(f'''<article class="label-{label}"><h3>Visit {number}: {label} ({confidence:.0%})</h3>
-<a href="{video}"><img src="{thumbnail}" alt="{escape(description)}"><br>Watch annotated clip</a>
+        heading = ', '.join(f'{species} ({score:.0%})' for species, score in track_answers)
+        cards.setdefault(hour, []).append(f'''<article class="label-{label}{' daytime' if daytime else ''}"><h3>Visit {number}: {heading}</h3>
+<a href="{video}"><img src="{thumbnail}" alt="{escape(description)}" loading="lazy"><br>Watch annotated clip</a>
 <p>{when} · {duration:g} seconds · {entry} → {exit_edge}</p><ul>{''.join(answers)}</ul>
 <ul aria-label="Tracks">{''.join(track_details)}</ul></article>''')
-    filters = ''.join(f'<input type="checkbox" id="label-{label}" checked><label for="label-{label}">{label} ({count})</label>'
+    filters = ''.join(f'<input type="checkbox" id="label-{label}"{" checked" if label != "none" else ""}><label for="label-{label}">{label} ({count})</label>'
                       for label, count in sorted(counts.items()))
-    css = ''.join(f'#label-{label}:not(:checked) ~ .visits > .label-{label} {{ display: none }}'
+    css = ''.join(f'#label-{label}:not(:checked) ~ .hours .label-{label} {{ display: none }}'
                   for label in counts)
+    css += '#label-daytime:not(:checked) ~ .hours .daytime { display: none }details { margin: 1rem 0 }summary { cursor: pointer; font-weight: bold; margin: .5rem 0 }'
+    groups = ''.join(f'<details open><summary>{hour.astimezone(zone):%Y-%m-%d %H:00 %Z} ({len(group)})</summary>'
+                     f'<div class="visits">{"".join(group)}</div></details>' for hour, group in sorted(cards.items()))
     content = f'''<p><a href="index.html">All nights</a> · Primary model: {escape(primary_model)}</p>
+<p>Show visits by most interesting label:</p>{filters}
+<input type="checkbox" id="label-daytime" checked><label for="label-daytime">Daytime</label>
 <svg viewBox="-20 -20 140 140" role="img" aria-labelledby="map-title map-description">
 <title id="map-title">8 × 8 metre garden patch</title><desc id="map-description">Entry-to-exit arrows; visit details in the legend below. Unknown endpoints are drawn at the centre. These are schematic edges, not calibrated positions.</desc>
 <rect x="0" y="0" width="100" height="100" fill="#f6f7f3" stroke="#333"/>
 <g font-size="5" text-anchor="middle"><text x="50" y="-5">far</text><text x="50" y="110">fence</text><text x="-10" y="50">left</text><text x="110" y="50">right</text></g>{''.join(arrows)}</svg>
 <p>Unknown endpoints use the centre; arrows show schematic edges, not calibrated positions.</p>
 <ul aria-label="Visit map legend">{''.join(legend)}</ul>
-<p>Show visits by primary label:</p>{filters}
-<div class="visits">{''.join(cards) if cards else '<p>No visits recorded</p>'}</div>'''
+<div class="hours">{groups or '<p>No visits recorded</p>'}</div>'''
     return _page(night, content, css)
 
 
