@@ -31,7 +31,7 @@ Files: `pi/record.sh`, `pi/foxcam-record.service`, `pi/foxcam-record.timer`, `pi
 
 - `record.sh` runs `rpicam-vid` at 1280x720, 10 frames per second, H.264, segmented into 5 minute files named by UTC timestamp, for example `2026-09-28T19-05-00Z.mp4`. It writes to a temporary name and renames on segment close so rsync only sees complete files. Exposure and gain are fixed values from `foxcam.env`, set once by eye against the flood; auto exposure is off so the background subtractor sees a stable image.
 - The record timer starts the service at `START_TIME` and stops it at `STOP_TIME` (fixed local times in `foxcam.env`). Sunset tables are out of scope.
-- The sync timer runs every 10 minutes: `rsync --remove-source-files` from the recordings folder to `VPS_HOST:/data/foxcam/incoming/`. A file is deleted from the Pi only after the VPS confirms it.
+- The sync timer runs every 5 minutes: `rsync --remove-source-files` from the recordings folder to `VPS_HOST:/data/foxcam/incoming/`. A file is deleted from the Pi only after the VPS confirms it.
 - A daily job deletes recordings older than 7 days as the safety valve against a full SD card when the VPS is unreachable.
 - systemd restarts the recorder 10 seconds after a crash.
 - `install.sh` runs from the Mac over SSH: copies the files, installs the units, enables the timers.
