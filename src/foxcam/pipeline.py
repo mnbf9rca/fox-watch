@@ -29,7 +29,7 @@ def load_config() -> dict:
               "PRIMARY_MODEL": os.environ.get("PRIMARY_MODEL", ""),
               "TZ": ZoneInfo(os.environ.get("TZ", "Europe/London"))}
     for name, default in dict(GAP_SECONDS=3, PAD_SECONDS=2, MIN_BLOB_AREA=100,
-                              EDGE_MARGIN=80, MIN_FREE_GB=10).items():
+                              EDGE_MARGIN=80, MIN_TRACK_MOVE=40, MIN_FREE_GB=10).items():
         config[name] = float(os.environ.get(name, default))
         if not math.isfinite(config[name]) or config[name] < 0:
             raise ValueError(f"{name} must be finite and nonnegative")
@@ -94,7 +94,7 @@ def _ingest(source: Path, captured: datetime, start: float, end: float, director
     padded = captured + timedelta(seconds=max(0, start - config["PAD_SECONDS"]))
     row = dict(clip=clip.name, night=directory.name, start_utc=padded.isoformat().replace("+00:00", "Z"),
                duration_s=length, labels={}, annotation_label=None,
-               **track(clip, config["MIN_BLOB_AREA"], config["EDGE_MARGIN"]))
+               **track(clip, config["MIN_BLOB_AREA"], config["EDGE_MARGIN"], config["MIN_TRACK_MOVE"]))
     _save(sidecar, row)
 
 
@@ -107,20 +107,24 @@ def _finish(sidecar: Path, config: dict, cutoff: date) -> None:
     if "tracks" not in row:
         row["tracks"] = []
         if clip.exists():
-            row.update(track(clip, config["MIN_BLOB_AREA"], config["EDGE_MARGIN"]))
+            row.update(track(clip, config["MIN_BLOB_AREA"], config["EDGE_MARGIN"], config["MIN_TRACK_MOVE"]))
+            row["labels"] = {}  # Clip-level answers do not describe the newly detected primary track.
     images = {item["id"]: [sidecar.with_name(f"{sidecar.stem}.t{item['id']}{suffix}.jpg") for suffix in ("", ".crop")]
               for item in row["tracks"]}
     frames = [sidecar.parent / name for name in row["frames"]] + [path for pair in images.values() for path in pair]
     if not all(path.is_file() for path in frames):
-        track(clip, config["MIN_BLOB_AREA"], config["EDGE_MARGIN"])
+        track(clip, config["MIN_BLOB_AREA"], config["EDGE_MARGIN"], config["MIN_TRACK_MOVE"])
     primary = max(row["tracks"], key=lambda item: len(item["boxes"]), default=None)
     if primary:
         primary["labels"] = row["labels"]  # the top-level labels are the primary track's; edits there win
+    elif clip.exists():
+        row["labels"] = {model: {"label": "none", "confidence": 1.0} for model in config["MODELS"]}
+        _save(sidecar, row)
     for item in row["tracks"]:
         for model in config["MODELS"]:
             if item["labels"].get(model, UNCLASSIFIED)["label"] != "unclassified":
                 continue
-            if item["class"] == "person" or item["class"] in VEHICLES:
+            if item["class"] in {"person", "vehicle"} or item["class"] in VEHICLES:
                 item["labels"][model] = {"label": "person" if item["class"] == "person" else "vehicle", "confidence": 1.0}
             else:
                 label, confidence, description = classify(model, images[item["id"]])

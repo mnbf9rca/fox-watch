@@ -41,6 +41,7 @@ class _NoRedirect(request.HTTPRedirectHandler):
 
 
 def classify(model: str, frames: list[Path]) -> tuple[str, float, str]:
+    answer = ""
     try:
         provider, model_id = model.split("/", 1)
         if provider not in ("nous", "deepinfra", "together") or not model_id or not frames:
@@ -65,9 +66,11 @@ def classify(model: str, frames: list[Path]) -> tuple[str, float, str]:
             "User-Agent": "foxcam/0.1",
         })
         with request.build_opener(_NoRedirect()).open(req, timeout=60) as response:
-            return parse_answer(json.load(response)["choices"][0]["message"]["content"])
+            answer = json.load(response)["choices"][0]["message"]["content"]
+            return parse_answer(answer)
     except (OSError, error.URLError, HTTPException, ValueError, KeyError, IndexError, TypeError) as exc:
-        logging.warning("%s: %s status=%s", model, type(exc).__name__, getattr(exc, "code", "-"))
+        logging.warning("%s: %s status=%s content=%r", model, type(exc).__name__,
+                        getattr(exc, "code", "-"), str(answer)[:200])
         return "unclassified", 0.0, ""
 
 

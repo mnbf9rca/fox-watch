@@ -65,3 +65,15 @@ def test_nms_keeps_overlapping_different_classes(monkeypatch):
     monkeypatch.setattr(detector, "load", lambda: Mock(forward=lambda: raw))
     found = detector.detect(np.zeros((640, 640, 3), dtype=np.uint8))
     assert [item[0] for item in found] == ["person", "dog"]
+
+
+def test_detector_allows_only_people_vehicles_and_animals(monkeypatch):
+    raw = np.zeros((1, 8400, 85), dtype=np.float32)
+    for index in range(len(detector.CLASSES)):
+        raw[0, index, :2] = (np.array([10 + index * 6, 100]) / 8 - detector._grids[index])
+        raw[0, index, 2:4] = np.log(4 / 8)
+        raw[0, index, 4] = raw[0, index, 5 + index] = 1
+    monkeypatch.setattr(detector, "load", lambda: Mock(forward=lambda: raw))
+    found = detector.detect(np.zeros((640, 640, 3), dtype=np.uint8))
+    assert [item[0] for item in found] == ["person", "vehicle", "vehicle", "vehicle", "vehicle", "vehicle",
+                                          "bird", "cat", "dog", "horse", "sheep", "cow", "bear"]

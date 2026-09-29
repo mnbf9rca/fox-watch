@@ -1,4 +1,5 @@
 from pathlib import Path
+import math
 import subprocess
 
 import cv2
@@ -106,7 +107,7 @@ def _blob_boxes(video, min_blob_area: float, width: int) -> list[list[int]]:
     return boxes
 
 
-def track(clip: Path, min_blob_area: float, edge_margin: float) -> dict:
+def track(clip: Path, min_blob_area: float, edge_margin: float, min_track_move: float = 40) -> dict:
     video = cv2.VideoCapture(str(clip))
     try:
         ok, image = video.read()
@@ -123,6 +124,10 @@ def track(clip: Path, min_blob_area: float, edge_margin: float) -> dict:
         if not tracks:
             boxes = _blob_boxes(video, min_blob_area, width)
             tracks = [{"id": 0, "class": "unknown", "boxes": boxes}] if boxes else []
+        # ponytail: endpoint displacement misses out-and-back motion; use path span if needed.
+        tracks = [item for item in tracks if math.dist(*[
+            (x + w / 2, y + h / 2) for _, x, y, w, h in (item["boxes"][0], item["boxes"][-1])
+        ]) >= min_track_move]
         for item in tracks:
             item["labels"], item["description"] = {}, ""
             item["entry_edge"], item["exit_edge"] = [

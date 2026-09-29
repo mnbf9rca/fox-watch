@@ -20,7 +20,9 @@ CLASSES = (
     "hot_dog pizza donut cake chair couch potted_plant bed dining_table toilet tv laptop mouse remote keyboard "
     "cell_phone microwave oven toaster sink refrigerator book clock vase scissors teddy_bear hair_drier toothbrush"
 ).split()
-VEHICLES = {"bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat"}
+VEHICLES = {"bicycle", "car", "motorcycle", "bus", "truck"}
+TRACK_CLASSES = {name: name for name in ("person", "dog", "cat", "bird", "horse", "sheep", "cow", "bear")}
+TRACK_CLASSES.update(dict.fromkeys(VEHICLES, "vehicle"))
 SIZE = 640
 CONFIDENCE = float(os.environ.get("DETECT_CONFIDENCE", 0.5))
 _net = None
@@ -69,8 +71,8 @@ def detect(frame: np.ndarray) -> list[tuple[str, float, int, int, int, int]]:
     boxes = (np.hstack([xy - wh / 2, wh])[keep] / ratio).round().astype(int)
     kept = cv2.dnn.NMSBoxesBatched(boxes.tolist(), confidences[keep].tolist(),
                                    classes[keep].tolist(), CONFIDENCE, 0.5)
-    return [(CLASSES[classes[keep][i]], float(confidences[keep][i]), *map(int, boxes[i]))
-            for i in np.asarray(kept).flatten()]
+    return [(TRACK_CLASSES[CLASSES[classes[keep][i]]], float(confidences[keep][i]), *map(int, boxes[i]))
+            for i in np.asarray(kept).flatten() if CLASSES[classes[keep][i]] in TRACK_CLASSES]
 
 
 def iou(a, b) -> float:
