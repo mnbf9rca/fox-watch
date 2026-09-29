@@ -18,6 +18,7 @@ def check_video(directory: Path) -> None:
     blank = directory / "blank.mp4"
     target = directory / "cut.mp4"
     truncated = directory / "truncated.mp4"
+    animal = directory / "animal.mp4"
     make_video(source)
     events = scan(source, min_blob_area=100)
     assert len(events) == 1, events
@@ -58,8 +59,22 @@ def check_video(directory: Path) -> None:
     assert output_stream["nb_frames"] == stream["nb_frames"]
     empty = track(blank, min_blob_area=100, edge_margin=80)
     assert empty["track"] == [] and empty["entry_edge"] == empty["exit_edge"] == "unknown"
+    assert [t["class"] for t in result["tracks"]] == ["unknown"]
+    assert result["tracks"][0]["boxes"] == result["track"]
+    assert all((target.parent / f"cut.t0{suffix}.jpg").is_file() for suffix in ("", ".crop"))
+    fox = cv2.imread(str(Path(__file__).with_name("fixtures") / "fox.jpg"))
+    sprite = cv2.resize(fox[700:1500, 1000:2100], (240, 174))
+    make_video(animal, sprite=sprite)
+    animal_result = track(animal, min_blob_area=100, edge_margin=150)
+    classes = [t["class"] for t in animal_result["tracks"]]
+    assert classes and "unknown" not in classes, classes
+    assert len(animal_result["tracks"][0]["boxes"]) >= 20, animal_result["tracks"]
+    assert (animal_result["entry_edge"], animal_result["exit_edge"]) == ("left", "far"), animal_result
+    crop = cv2.imread(str(animal.with_name("animal.t0.crop.jpg")))
+    assert crop is not None and crop.shape[0] < 720
     print(f"PASS: moving/static/truncated scan; H.264 cut {duration:.1f}s; "
-          f"left → far track; four JPEGs; annotated 1280x720 H.264 ({output_stream['nb_frames']} frames)")
+          f"left → far track; four JPEGs; annotated 1280x720 H.264 ({output_stream['nb_frames']} frames); "
+          f"sprite tracks {classes} with {len(animal_result['tracks'][0]['boxes'])} boxes")
 
 
 if __name__ == "__main__":
