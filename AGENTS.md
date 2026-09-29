@@ -26,4 +26,5 @@ Fox Watch: a Raspberry Pi records the garden overnight, a VPS classifies what mo
 - Python's default urllib User-Agent is blocked by Together's Cloudflare front (HTTP 403 error 1010); `classify.py` sends its own.
 - A capture before the local `START_TIME` belongs to the previous evening's night, so a 16:36 UTC test clip appears under the day before.
 - `rpicam-vid` holds the camera; stop `foxcam-record.service` before taking a still with `rpicam-still`, then start it again if inside the recording window. The timer only fires at `START_TIME`, so a service that died mid-window must be started by hand.
+- The Pi currently runs `ALWAYS_ON=1` with automatic exposure (`SHUTTER_US=0`, `GAIN=0`) for the street view; the night pages still split at `START_TIME`.
 - Running motion thresholds (`MIN_BLOB_AREA`, `EDGE_MARGIN`) and camera settings (`SHUTTER_US`, `GAIN`, `AWB_GAINS`) are indoor starting values, not garden-calibrated.

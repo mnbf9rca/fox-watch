@@ -8,7 +8,7 @@ if [[ ${1:-} == --once && $# == 1 ]]; then once=1
 elif (( $# )); then echo 'usage: record.sh [--once]' >&2; exit 2; fi
 
 stop_epoch=0
-if (( ! once )); then
+if (( ! once )) && [[ ${ALWAYS_ON:-0} != 1 ]]; then
     now=$(date +%H:%M)
     stop_day=today
     if [[ $START_TIME < $STOP_TIME ]]; then
@@ -38,7 +38,7 @@ trap 'exit 130' INT
 
 while :; do
     seconds=300
-    if (( ! once )); then
+    if (( ! once )) && [[ ${ALWAYS_ON:-0} != 1 ]]; then
         remaining=$((stop_epoch - $(date +%s)))
         (( remaining > 0 )) || exit 0
         if (( remaining < seconds )); then seconds=$remaining; fi
