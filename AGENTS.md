@@ -12,6 +12,8 @@ Fox Watch: a Raspberry Pi records the garden overnight, a VPS classifies what mo
 
 - Pi: `bash pi/install.sh` from the Mac. Checks: `ssh rob@192.168.17.145 'sudo bash /opt/foxcam-pi/check.sh timers|capture|sync-failure'`.
 - VPS code: `bash vps/install.sh --provision`. Serving files: `bash vps/install.sh --serving`. Config or key change: edit `vps/foxcam.env.example` then `bash vps/install.sh --secrets`. Cron: `bash vps/install.sh --enable-cron`. Checks: `ssh root@62.238.55.235 'bash /opt/foxcam/vps/check.sh storage|pipeline|serving'`.
+- Deploying code that changes `vps/foxcam.cron` or `vps/foxcam.env.example` needs `--provision` (ships code, downloads the pinned detector model) and then `--secrets` (rewrites `/etc/foxcam.env`); `--enable-cron` only installs the cron file already under `/opt/foxcam`. Pause the cron during a deploy (`mv /etc/cron.d/foxcam /root/foxcam.cron.off`, deploy, move back) so a run never starts on half-updated code.
+- To re-track existing clips after a detector or filter change, delete the `tracks` key from their sidecars; the next run re-tracks any sidecar without `tracks` whose raw clip still exists and discards its old clip-level labels.
 - Tunnel and DNS: `ssh root@62.238.55.235 'bash /opt/foxcam/vps/publish.sh --access-ready'`, rerunnable, needs a prior `cloudflared tunnel login` on the VPS.
 
 ## Secrets
@@ -21,6 +23,9 @@ Fox Watch: a Raspberry Pi records the garden overnight, a VPS classifies what mo
 - Codex tool commands do not see direnv variables or the token. Codex 0.158 runs tool commands through a shared app-server daemon started once per machine from whichever shell launched Codex first, and commands inherit that daemon's environment, not the TUI's. Do not restart the daemon from this repo's shell: every Codex session on the machine would then hold this project's vault token. Have a Claude session that loaded `.envrc` run the secret-bearing commands and relay non-secret output. Codex's own `*TOKEN*` name filter is off by default and is not the cause.
 
 ## Gotchas
+
+- Detection runs in a 4-process pool with one OpenCV thread each (`WORKERS`); OpenCV alone would otherwise use every core per process. Watch `processed ... clip minutes` in `/data/foxcam/logs/*.log`; seconds per clip minute must stay below 60 or the 5 minute cron falls behind. Python buffers that log until the run exits.
+- COCO detector classes outside person, the five vehicle classes and seven animal classes are dropped; tracks whose centroid path spans under `MIN_TRACK_MOVE` pixels (parked cars) are dropped. `DETECT_CONFIDENCE` defaults to 0.5 and small or dim animals sit near it.
 
 - Together.ai's serverless vision models reject requests with more than one image, and its Qwen3-VL models need a paid dedicated endpoint. Together stays configured but out of `MODELS`.
 - Python's default urllib User-Agent is blocked by Together's Cloudflare front (HTTP 403 error 1010); `classify.py` sends its own.
