@@ -4,13 +4,13 @@ import os
 from pathlib import Path
 
 from foxcam.classify import compare
-from foxcam.pipeline import load_config, read_sidecar, run
+from foxcam.pipeline import load_config, read_sidecar, refile, run
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Process recordings and compare Fox Watch labels")
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("run", "compare"):
+    for name in ("run", "compare", "refile"):
         command = commands.add_parser(name)
         command.add_argument("--data", type=Path, default=Path(os.environ.get("DATA_DIR", "/data/foxcam")))
         if name == "run":
@@ -20,6 +20,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "run":
             run(args.data, args.night)
+            return 0
+        if args.command == "refile":
+            print(f"Moved {refile(args.data)} sidecars")
             return 0
         config = load_config()
         rows, failed = [], False

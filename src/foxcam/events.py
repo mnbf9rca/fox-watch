@@ -1,4 +1,4 @@
-from datetime import datetime, time, timedelta, timezone
+from datetime import datetime, time, timezone
 from zoneinfo import ZoneInfo
 
 
@@ -20,8 +20,7 @@ def merge_events(
 
 
 def night_for(start_utc: datetime, start_time: time, zone: ZoneInfo) -> str:
-    local = start_utc.astimezone(zone)
-    return (local.date() - timedelta(days=local.time() < start_time)).isoformat()
+    return start_utc.astimezone(zone).date().isoformat()
 
 
 def clip_name(start_utc: datetime) -> str:

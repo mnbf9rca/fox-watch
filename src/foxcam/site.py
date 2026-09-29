@@ -60,8 +60,8 @@ def render_night(night: str, visits: list[dict], primary_model: str) -> str:
         stamp = datetime.fromisoformat(visit["start_utc"])
         if stamp.tzinfo is None:
             raise ValueError("timestamp must have a timezone")
-        when = stamp.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         local = stamp.astimezone(zone)
+        when = local.strftime("%Y-%m-%d %H:%M %Z")
         daytime = (stop_time <= local.time() < start_time if stop_time < start_time
                    else not start_time <= local.time() < stop_time)
         hour = local.replace(minute=0, second=0, microsecond=0).astimezone(timezone.utc)
@@ -86,7 +86,7 @@ def render_night(night: str, visits: list[dict], primary_model: str) -> str:
             start, end = item["entry_edge"], item["exit_edge"]
             if start not in EDGES or end not in EDGES:
                 raise ValueError("invalid track edge")
-            detail = (f"Visit {number}, track {index + 1}: {item.get('class', 'unknown')} — "
+            detail = (f"Visit {number}, {when}, track {index + 1}: {item.get('class', 'unknown')} — "
                       f"{species} ({score:.0%}), {start} → {end}. {item.get('description', '')}")
             track_details.append(f"<li>{escape(detail)}</li>")
             x1, y1 = EDGES[start]
@@ -100,7 +100,7 @@ def render_night(night: str, visits: list[dict], primary_model: str) -> str:
 <path d="{path}" fill="none" stroke="{color}" stroke-width="1.5" marker-end="url(#{marker})"><title>{escape(detail)}</title></path>''')
             legend.append(f'<li><span style="color:{color}" aria-hidden="true">●</span> {escape(detail)}</li>')
         heading = ', '.join(f'{species} ({score:.0%})' for species, score in track_answers)
-        cards.setdefault(hour, []).append(f'''<article class="label-{label}{' daytime' if daytime else ''}"><h3>Visit {number}: {heading}</h3>
+        cards.setdefault(hour, []).append(f'''<article class="label-{label}{' daytime' if daytime else ''}" title="{escape(description)}"><h3>Visit {number}, {when}: {heading}</h3>
 <a href="{video}"><img src="{thumbnail}" alt="{escape(description)}" loading="lazy"><br>Watch annotated clip</a>
 <p>{when} · {duration:g} seconds · {entry} → {exit_edge}</p><ul>{''.join(answers)}</ul>
 <ul aria-label="Tracks">{''.join(track_details)}</ul></article>''')
@@ -111,7 +111,7 @@ def render_night(night: str, visits: list[dict], primary_model: str) -> str:
     css += '#label-daytime:not(:checked) ~ .hours .daytime { display: none }details { margin: 1rem 0 }summary { cursor: pointer; font-weight: bold; margin: .5rem 0 }'
     groups = ''.join(f'<details open><summary>{hour.astimezone(zone):%Y-%m-%d %H:00 %Z} ({len(group)})</summary>'
                      f'<div class="visits">{"".join(group)}</div></details>' for hour, group in sorted(cards.items()))
-    content = f'''<p><a href="index.html">All nights</a> · Primary model: {escape(primary_model)}</p>
+    content = f'''<p><a href="index.html">All days</a> · Primary model: {escape(primary_model)}</p>
 <p>Show visits by most interesting label:</p>{filters}
 <input type="checkbox" id="label-daytime" checked><label for="label-daytime">Daytime</label>
 <svg viewBox="-20 -20 140 140" role="img" aria-labelledby="map-title map-description">
@@ -130,7 +130,7 @@ def render_index(nights: dict[str, list[dict]], primary_model: str) -> str:
         counts = Counter(_primary(visit, primary_model)[0] for visit in nights[night])
         summary = ", ".join(f"{species}: {count}" for species, count in sorted(counts.items())) or "No visits recorded"
         items.append(f'<li><a href="{quote(night, safe="")}.html">{escape(night)}</a> — {summary}</li>')
-    return _page("Nights", f'<p>Primary model: {escape(primary_model)}</p><ul>{"".join(items)}</ul>')
+    return _page("Days", f'<p>Primary model: {escape(primary_model)}</p><ul>{"".join(items)}</ul>')
 
 
 def build_site(data_dir: Path, primary_model: str) -> None:

@@ -78,6 +78,39 @@ def read_sidecar(path: Path, primary_model: str) -> dict:
 UNCLASSIFIED = {"label": "unclassified", "confidence": 0.0}
 
 
+def refile(data_dir: Path) -> int:
+    """Move complete visit bundles to local calendar days; preflight all collisions."""
+    config = load_config()
+    if not data_dir.is_dir():
+        raise FileNotFoundError(data_dir)
+    planned, targets = [], set()
+    for sidecar in sorted((data_dir / "nights").glob("*/*.json")):
+        row = read_sidecar(sidecar, config["PRIMARY_MODEL"])
+        day = night_for(datetime.fromisoformat(row["start_utc"]), config["START_TIME"], config["TZ"])
+        if sidecar.parent.name == day:
+            continue
+        directory = sidecar.parent.with_name(day)
+        files = [sidecar.parent / row["clip"], sidecar.with_suffix(".annotated.mp4"),
+                 *(sidecar.parent / name for name in row["frames"]),
+                 *sidecar.parent.glob(sidecar.stem + ".t*.jpg"), sidecar]
+        for source in files:
+            target = directory / source.name
+            if os.path.lexists(target) or target in targets:
+                raise FileExistsError(f"Refusing to overwrite: {target}")
+            targets.add(target)
+        planned.append((sidecar, row, directory, files))
+    for sidecar, row, directory, files in planned:
+        directory.mkdir(parents=True, exist_ok=True)
+        for source in files[:-1]:
+            if source.exists():  # Raw clips may already have expired.
+                os.replace(source, directory / source.name)
+        row["night"] = directory.name
+        _save(sidecar, row)
+        os.replace(sidecar, directory / sidecar.name)
+    build_site(data_dir, config["PRIMARY_MODEL"])
+    return len(planned)
+
+
 def _init_worker():
     cv2.setNumThreads(1)
 
@@ -191,7 +224,8 @@ def run(data_dir: Path, night: str | None = None) -> None:
             complete, futures = True, []
             # ponytail: visits split at recording boundaries; merge across files if field footage needs it.
             for _, start, end in events:
-                event_night = night_for(captured + timedelta(seconds=start), config["START_TIME"], config["TZ"])
+                padded = captured + timedelta(seconds=max(0, start - config["PAD_SECONDS"]))
+                event_night = night_for(padded, config["START_TIME"], config["TZ"])
                 if night is not None and event_night != night:
                     complete = False
                     continue

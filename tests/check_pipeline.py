@@ -41,6 +41,62 @@ def playable(path):
     assert stream["codec_name"] == "h264" and int(stream["nb_frames"]) > 0
 
 
+def check_refile(data, env):
+    old = data / "nights/2026-09-28"
+    target = data / "nights/2026-09-29"
+    old.mkdir(parents=True)
+    target.mkdir()
+    names = []
+    for stem, stamp in (("23-30-00", "2026-09-28T23:30:00Z"), ("05-30-00", "2026-09-29T05:30:00Z")):
+        frames = [f"{stem}.f{i}.jpg" for i in range(4)]
+        row = dict(clip=stem + ".mp4", night=old.name, start_utc=stamp, duration_s=1,
+                   labels={env["PRIMARY_MODEL"]: {"label": "none", "confidence": 1.0}},
+                   track=[], tracks=[], frames=frames, entry_edge="unknown", exit_edge="unknown")
+        (old / (stem + ".json")).write_text(json.dumps(row))
+        media = [row["clip"], stem + ".annotated.mp4", *frames, stem + ".t0.jpg", stem + ".t0.crop.jpg"]
+        for name in media:
+            (old / name).write_bytes(name.encode())
+        names.extend(media)
+    # A conflict on the second sidecar must leave both source bundles untouched.
+    blocker = target / "23-30-00.annotated.mp4"
+    blocker.write_bytes(b"do not overwrite")
+    before = {str(p.relative_to(data)): p.read_bytes() for p in data.rglob("*") if p.is_file()}
+    refused = cli(data, env, "refile")
+    assert refused.returncode != 0 and "Refusing to overwrite" in refused.stderr, refused.stderr
+    assert before == {str(p.relative_to(data)): p.read_bytes() for p in data.rglob("*") if p.is_file()}
+    blocker.unlink()
+    moved = cli(data, env, "refile")
+    passed(moved)
+    assert "Moved 2 sidecars" in moved.stdout, moved.stdout
+    assert not list(old.iterdir())
+    for name in names:
+        assert (target / name).read_bytes() == name.encode()
+    assert all(json.loads(p.read_text())["night"] == target.name for p in target.glob("*.json"))
+    page = (data / "site/2026-09-29.html").read_text()
+    assert "00:30 BST" in page and "06:30 BST" in page and "UTC" not in page
+    assert "Days" in (data / "site/index.html").read_text()
+    state = media_state(data)
+    again = cli(data, env, "refile")
+    passed(again)
+    assert "Moved 0 sidecars" in again.stdout and media_state(data) == state
+    print("PASS: refile two sidecars, all media, collision refusal, local days, and idempotence")
+
+
+def check_calendar_boundary(data, env, fixture):
+    incoming = data / "incoming"
+    incoming.mkdir(parents=True)
+    shutil.copyfile(fixture, incoming / "2026-09-28T22-59-53Z.mp4")
+    passed(cli(data, env, "run"))
+    sidecar, = (data / "nights").glob("*/*.json")
+    row = json.loads(sidecar.read_text())
+    assert row["start_utc"] == "2026-09-28T22:59:59Z"
+    assert sidecar.parent.name == row["night"] == "2026-09-28"
+    result = cli(data, env, "refile")
+    passed(result)
+    assert "Moved 0 sidecars" in result.stdout
+    print("PASS: padded midnight capture stays in its local calendar day")
+
+
 def check(data, live=False):
     env = os.environ.copy()
     root = Path(__file__).resolve().parents[1]
@@ -55,6 +111,8 @@ def check(data, live=False):
             env.pop(key, None)
         env.update(MODELS=MODEL, PRIMARY_MODEL=MODEL, DEEPINFRA_BASE_URL="https://127.0.0.1:1",
                    DEEPINFRA_API_KEY="local-check-no-secret")
+    if not live:
+        check_refile(data / "refile-check", env)
     models = env["MODELS"].split(",")
     primary = env["PRIMARY_MODEL"]
     missing = data / "missing-data"
@@ -66,6 +124,8 @@ def check(data, live=False):
     night = night_for(stamp, time(19), ZoneInfo("Europe/London"))
     fixture = data / "fixture.mp4"
     make_video(fixture)
+    if not live:
+        check_calendar_boundary(data / "boundary-check", env, fixture)
     source = incoming / stamp.strftime("%Y-%m-%dT%H-%M-%SZ.mp4")
     shutil.copyfile(fixture, source)
     completed_run = cli(data, env, "run")

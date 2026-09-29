@@ -29,7 +29,7 @@ Fox Watch: a Raspberry Pi records the garden overnight, a VPS classifies what mo
 
 - Together.ai's serverless vision models reject requests with more than one image, and its Qwen3-VL models need a paid dedicated endpoint. Together stays configured but out of `MODELS`.
 - Python's default urllib User-Agent is blocked by Together's Cloudflare front (HTTP 403 error 1010); `classify.py` sends its own.
-- A capture before the local `START_TIME` belongs to the previous evening's night, so a 16:36 UTC test clip appears under the day before.
+- Pages use the capture's local calendar date in `TZ`; `START_TIME` no longer shifts early captures to the previous day. Displayed times are local with the zone abbreviation. Use `python -m foxcam refile --data DIR` to migrate existing sidecars and media with processing stopped.
 - `rpicam-vid` holds the camera; stop `foxcam-record.service` before taking a still with `rpicam-still`, then start it again if inside the recording window. The timer only fires at `START_TIME`, so a service that died mid-window must be started by hand.
-- The Pi currently runs `ALWAYS_ON=1` with automatic exposure (`SHUTTER_US=0`, `GAIN=0`) for the street view; the night pages still split at `START_TIME`.
+- The Pi currently runs `ALWAYS_ON=1` with automatic exposure (`SHUTTER_US=0`, `GAIN=0`) for the street view; pages split at local midnight; `START_TIME` and `STOP_TIME` still define the daytime filter.
 - Running motion thresholds (`MIN_BLOB_AREA`, `EDGE_MARGIN`) and camera settings (`SHUTTER_US`, `GAIN`, `AWB_GAINS`) are indoor starting values, not garden-calibrated.

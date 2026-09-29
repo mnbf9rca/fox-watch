@@ -60,7 +60,7 @@ def test_build_skips_bad_sidecars_and_keeps_empty_nights(tmp_path, caplog):
     build_site(tmp_path, "nous/a")
     page = (tmp_path / "site/2026-09-28.html").read_text()
     assert page.count("<article") == 1
-    assert "unknown" in page and "UTC" in page and "8" in page
+    assert "unknown" in page and "BST" in page and "8" in page
     assert '/nights/2026-09-28/19-05-00.f3.jpg' in page
     assert "No visits recorded" in (tmp_path / "site/2026-09-29.html").read_text()
     assert "fox: 1" in (tmp_path / "site/index.html").read_text()
@@ -127,3 +127,16 @@ def test_daytime_respects_config_and_groups_distinct_dst_hours(monkeypatch):
     html = render_night("2026-09-28", visits, "nous/a")
     assert '<summary>2026-10-25 01:00 BST (1)</summary>' in html
     assert '<summary>2026-10-25 01:00 GMT (1)</summary>' in html
+
+
+def test_all_displayed_times_are_local_and_index_lists_days(monkeypatch):
+    monkeypatch.setenv("TZ", "Europe/London")
+    visit = _visit(["dog", "person"], "2026-09-28T20:13:00Z")
+    html = render_night("2026-09-28", [visit], "nous/a")
+    assert "UTC" not in html and "All days" in html and "All nights" not in html
+    assert "21:13 BST" in re.search(r"<h3>(.*?)</h3>", html)[1]
+    assert 'title="' in html and "21:13 BST" in re.search(r'<article[^>]*title="([^"]+)"', html)[1]
+    tooltips = re.findall(r'<path[^>]*marker-end=[^>]*><title>(.*?)</title>', html)
+    assert len(tooltips) == 2 and all("21:13 BST" in title for title in tooltips)
+    index = render_index({"2026-09-28": [visit]}, "nous/a")
+    assert "Fox Watch — Days" in index and "Nights" not in index
