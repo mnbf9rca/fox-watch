@@ -151,6 +151,9 @@ rsync -a --exclude='__pycache__' --exclude='*.pyc' -e 'ssh -o BatchMode=yes -o C
 ssh "${ssh_options[@]}" "$host" 'bash -s' <<'REMOTE'
 set -euo pipefail
 /opt/foxcam/.venv/bin/python -m pip install /opt/foxcam
+# Prefetch the pinned YOLOX weights; detect.py verifies the SHA-256 on every load.
+install -d -o root -g root -m 755 /opt/foxcam/models
+MODEL_DIR=/opt/foxcam/models /opt/foxcam/.venv/bin/python -m foxcam.detect
 chown -R root:root /opt/foxcam/src /opt/foxcam/tests /opt/foxcam/vps
 chmod 755 /opt/foxcam/vps/*.sh
 if [[ ! -e /etc/foxcam.env ]]; then

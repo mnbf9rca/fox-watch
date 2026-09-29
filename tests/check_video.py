@@ -8,6 +8,9 @@ from tempfile import TemporaryDirectory
 
 import cv2
 
+import os
+os.environ.setdefault("MODEL_DIR", str(Path(__file__).resolve().parents[1] / "models"))
+
 from make_video import make_video
 from foxcam.media import annotate, cut, scan, track
 

@@ -22,6 +22,7 @@ storage)
     test "$(stat -c %a /etc/foxcam.env)" = 600
     for dir in incoming nights site logs; do test -d "/data/foxcam/$dir"; done
     /opt/foxcam/.venv/bin/python -c 'import foxcam, cv2, numpy'
+    test "$(sha256sum /opt/foxcam/models/yolox.onnx | cut -d' ' -f1)" = c5c2d13e59ae883e6af3b45daea64af4833a4951c92d116ec270d9ddbe998063
     command -v ffmpeg ffprobe rsync >/dev/null
     test "$(command -v rrsync)" = /usr/bin/rrsync
     systemctl is-active --quiet cron
@@ -48,7 +49,7 @@ assert free > 10, free
 print(f'{free:.2f}')
 PY
     )
-    echo "PASS storage: /data mounted; directories=4; env=600; package/tools/cron=OK; secrets=$secrets; cron=$cron_state; free=${free}GiB"
+    echo "PASS storage: /data mounted; directories=4; env=600; package/tools/model/cron=OK; secrets=$secrets; cron=$cron_state; free=${free}GiB"
     ;;
 pipeline)
     /opt/foxcam/.venv/bin/python /opt/foxcam/tests/check_pipeline.py

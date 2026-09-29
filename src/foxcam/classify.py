@@ -10,10 +10,10 @@ from urllib import error, request
 from urllib.parse import urlsplit
 
 
-LABELS = ("fox", "hedgehog", "cat", "badger", "rat", "mouse", "bird", "deer", "other", "none")
+LABELS = ("fox", "hedgehog", "cat", "badger", "rat", "mouse", "bird", "deer", "dog", "person", "vehicle", "other", "none")
 
 
-def parse_answer(text: str) -> tuple[str, float]:
+def parse_answer(text: str) -> tuple[str, float, str]:
     if not isinstance(text, str):
         raise ValueError("answer must be text")
     fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", text.strip(), re.DOTALL)
@@ -29,7 +29,10 @@ def parse_answer(text: str) -> tuple[str, float]:
     confidence = answer.get("confidence")
     if type(confidence) not in (int, float) or not 0 <= confidence <= 1 or not math.isfinite(confidence):
         raise ValueError("invalid confidence")
-    return answer["label"], float(confidence)
+    description = answer.get("description", "")
+    if not isinstance(description, str):
+        raise ValueError("invalid description")
+    return answer["label"], float(confidence), description
 
 
 class _NoRedirect(request.HTTPRedirectHandler):
@@ -37,19 +40,20 @@ class _NoRedirect(request.HTTPRedirectHandler):
         return None
 
 
-def classify(model: str, frames: list[Path]) -> tuple[str, float]:
+def classify(model: str, frames: list[Path]) -> tuple[str, float, str]:
     try:
         provider, model_id = model.split("/", 1)
-        if provider not in ("nous", "deepinfra", "together") or not model_id or len(frames) != 4:
+        if provider not in ("nous", "deepinfra", "together") or not model_id or not frames:
             raise ValueError("invalid model or frames")
         base = os.environ[f"{provider.upper()}_BASE_URL"]
         url = urlsplit(base)
         if url.scheme != "https" or not url.hostname or url.username or url.password or url.query or url.fragment:
             raise ValueError("invalid base URL")
         content = [{"type": "text", "text": (
-            "These four infrared garden camera frames show one visit. Identify the animal. "
-            f"Return only a JSON object with label (one of {', '.join(LABELS)}) and "
-            "confidence (a number from 0 to 1). Use none if no animal is visible."
+            "A fixed camera watches a patch of ground. The first image is a full frame with a box drawn "
+            "around one moving object; the second is that box cropped at full resolution. Identify what is "
+            f"in the box. Return only a JSON object with label (one of {', '.join(LABELS)}), confidence "
+            "(a number from 0 to 1) and description (one short sentence). Use none if nothing is there."
         )}]
         for frame in frames:
             encoded = base64.b64encode(frame.read_bytes()).decode("ascii")
@@ -64,7 +68,7 @@ def classify(model: str, frames: list[Path]) -> tuple[str, float]:
             return parse_answer(json.load(response)["choices"][0]["message"]["content"])
     except (OSError, error.URLError, HTTPException, ValueError, KeyError, IndexError, TypeError) as exc:
         logging.warning("%s: %s status=%s", model, type(exc).__name__, getattr(exc, "code", "-"))
-        return "unclassified", 0.0
+        return "unclassified", 0.0, ""
 
 
 def compare(sidecars: list[dict], primary_model: str) -> dict[str, tuple[int, int]]:

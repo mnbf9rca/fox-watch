@@ -44,6 +44,7 @@ def playable(path):
 def check(data, live=False):
     env = os.environ.copy()
     root = Path(__file__).resolve().parents[1]
+    env.setdefault("MODEL_DIR", str(root / "models"))
     for assignment in shlex.split((root / "vps/foxcam.env.example").read_text(), comments=True):
         key, value = assignment.split("=", 1)
         env.setdefault(key, value)
@@ -83,12 +84,18 @@ def check(data, live=False):
     assert not source.exists()
     assert annotated.exists() and all(frame.exists() for frame in frames)
     playable(annotated)
+    assert row["tracks"][0]["class"] == "unknown" and row["tracks"][0]["labels"] == row["labels"], row["tracks"]
+    throughput = [line for line in completed_run.stderr.splitlines() if "per clip minute" in line]
+    assert len(throughput) == 1, completed_run.stderr
+    seconds_per_minute = float(throughput[0].rsplit("(", 1)[1].split()[0])
+    print(f"{throughput[0]}; real-time ratio {seconds_per_minute / 60:.2f}")
     if live:
         for model in models:
             answer = row["labels"][model]
             assert answer["label"] != "unclassified", model
             print(f"{model}: {answer['label']}, confidence={answer['confidence']}")
-        assert row["annotation_label"] == [row["labels"][primary]["label"], row["labels"][primary]["confidence"]]
+        print(f"description: {row['tracks'][0]['description']!r}")
+        assert row["annotation_label"] == [[row["labels"][primary]["label"], row["labels"][primary]["confidence"]]]
         print("PASS: live provider answers and playable primary H.264 annotation")
         return
     assert row["labels"][MODEL] == {"label": "unclassified", "confidence": 0.0}
@@ -127,7 +134,7 @@ def check(data, live=False):
     passed(cli(data, env, "run"))
     changed_annotation = (sha256(annotated.read_bytes()).hexdigest(), annotated.stat().st_mtime_ns)
     assert changed_annotation != old_annotation
-    assert json.loads(sidecar.read_text())["annotation_label"] == ["fox", 0.9]
+    assert json.loads(sidecar.read_text())["annotation_label"] == [["fox", 0.9]]
     passed(cli(data, env, "run"))
     assert (sha256(annotated.read_bytes()).hexdigest(), annotated.stat().st_mtime_ns) == changed_annotation
     # Configuration and space refusals must happen before input changes.
@@ -184,7 +191,7 @@ def check(data, live=False):
     passed(cli(data, env, "run"))
     assert old_clip.exists()
     old_row["labels"][MODEL] = {"label": "fox", "confidence": 0.9}
-    old_row["annotation_label"] = ["fox", 0.9]
+    old_row["annotation_label"] = [["fox", 0.9]]
     old_sidecar.write_text(json.dumps(old_row))
     # Force annotation repair before allowing expiration.
     (old_dir / annotated.name).unlink()
@@ -198,7 +205,7 @@ def check(data, live=False):
     archived_media = media_state(old_dir)
     passed(cli(data, env, "run"))
     assert media_state(old_dir) == archived_media
-    assert json.loads(old_sidecar.read_text())["annotation_label"] == ["bird", 0.8]
+    assert json.loads(old_sidecar.read_text())["annotation_label"] == [["bird", 0.8]]
     assert not old_clip.exists()
     playable(old_dir / annotated.name)
     refreshed = media_state(old_dir)

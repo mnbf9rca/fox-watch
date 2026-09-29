@@ -27,7 +27,7 @@ def _page(title, body):
 def _answer(answer):
     if answer == {"label": "unclassified", "confidence": 0}:
         return "unclassified", 0.0
-    return parse_answer(json.dumps(answer))
+    return parse_answer(json.dumps(answer))[:2]
 
 
 def _primary(visit, model):

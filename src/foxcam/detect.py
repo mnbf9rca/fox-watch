@@ -78,12 +78,12 @@ def iou(a, b) -> float:
 
 def link(detections: list[tuple[int, list]], max_misses: int = 10) -> list[dict]:
     """Greedy same-class IoU linking; a track ends after max_misses consecutive processed frames."""
-    # ponytail: IoU only; fast small animals may split into several tracks. Centroid distance or Kalman if so.
+    # ponytail: any overlap links; a 10 fps mover with missed detections still splits. Centroid distance or Kalman if so.
     tracks, live = [], []
     for frame, found in detections:
         matched = set()
         for name, _, *box in sorted(found, key=lambda d: -d[1]):
-            best, best_iou = None, 0.1
+            best, best_iou = None, 0.0
             for track in live:
                 if track["class"] == name and id(track) not in matched:
                     score = iou(track["boxes"][-1][1:], box)

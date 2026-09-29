@@ -35,21 +35,23 @@ def scan(
         video.release()
 
 
+def duration(path: Path) -> float:
+    return float(subprocess.check_output(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", str(path)], text=True))
+
+
 def cut(
     source: Path, start: float, end: float, target: Path, pad_seconds: float = 2
 ) -> float:
     """Copy a padded interval; stream-copy boundaries round to source keyframes."""
-    duration = float(subprocess.check_output(
-        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-         "-of", "default=noprint_wrappers=1:nokey=1", str(target if target.exists() else source)],
-        text=True,
-    ))
     if target.exists():
-        return duration
+        return duration(target)
+    length = duration(source)
     if not 0 <= start < end or pad_seconds < 0:
         raise ValueError("Invalid event interval or padding")
     seek = max(0, start - pad_seconds)
-    stop = min(duration, end + pad_seconds)
+    stop = min(length, end + pad_seconds)
     if stop <= seek:
         raise ValueError("Event is outside the source video")
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -65,12 +67,9 @@ def cut(
             raise ValueError(f"Cannot decode cut: {temporary}")
     finally:
         video.release()
-    duration = float(subprocess.check_output(
-        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-         "-of", "default=noprint_wrappers=1:nokey=1", str(temporary)], text=True,
-    ))
+    length = duration(temporary)
     temporary.replace(target)
-    return duration
+    return length
 
 
 def _write(target: Path, image) -> None:

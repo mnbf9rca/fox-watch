@@ -17,8 +17,8 @@ def main():
         os.environ.setdefault(key, value)
     fixtures = root / "tests/fixtures"
     if args.failure:
-        answer = classify("deepinfra/__foxcam_nonexistent_model__", [fixtures / "fox.jpg"] * 4)
-        assert answer == ("unclassified", 0.0), answer
+        answer = classify("deepinfra/__foxcam_nonexistent_model__", [fixtures / "fox.jpg"] * 2)
+        assert answer == ("unclassified", 0.0, ""), answer
         print("Invalid model: unclassified, confidence=0.0 (PASS)")
         return
     models = os.environ["MODELS"].split(",")
@@ -26,8 +26,8 @@ def main():
     failed = []
     for model in models:
         for animal in ("fox", "hedgehog"):
-            label, confidence = classify(model, [fixtures / f"{animal}.jpg"] * 4)
-            print(f"{model}: expected={animal}, observed={label}, confidence={confidence}", flush=True)
+            label, confidence, description = classify(model, [fixtures / f"{animal}.jpg"] * 2)
+            print(f"{model}: expected={animal}, observed={label}, confidence={confidence}, description={description!r}", flush=True)
             if label == "unclassified":
                 failed.append((model, animal))
     assert not failed, f"Failed model/image checks: {failed}"
