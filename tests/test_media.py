@@ -1,35 +1,25 @@
-from unittest.mock import Mock
-
-import numpy as np
-import pytest
-
-from foxcam import media
+from foxcam.media import _moved
 
 
-@pytest.mark.parametrize("detected, boxes, minimum, survives", [
-    (True, [[0, 100, 100, 100, 100], [2, 100, 100, 100, 100]], 40, False),
-    (True, [[0, 100, 100, 100, 100], [2, 139, 100, 100, 100]], 40, False),
-    (True, [[0, 100, 100, 100, 100], [2, 124, 132, 100, 100]], 40, True),
-    (True, [[0, 100, 100, 100, 100], [2, 100, 100, 180, 100]], 40, True),
-    (True, [[0, 100, 100, 100, 100]], 40, False),
-    (True, [[0, 100, 100, 100, 100]], 0, True),
-    (False, [[0, 100, 100, 100, 100], [2, 140, 100, 100, 100]], 40, True),
-    (False, [[0, 100, 100, 100, 100], [2, 139, 100, 100, 100]], 40, False),
-    (False, [], 40, False),
-])
-def test_track_filters_static_detections_and_fallback(tmp_path, monkeypatch, detected, boxes, minimum, survives):
-    image = np.zeros((720, 1280, 3), dtype=np.uint8)
-    video = Mock(read=Mock(side_effect=[(True, image)] * 3 + [(False, None)]))
-    monkeypatch.setattr(media.cv2, "VideoCapture", lambda path: video)
-    monkeypatch.setattr(media, "detect", lambda image: [])
-    monkeypatch.setattr(media, "link", lambda detections: [{"id": 0, "class": "vehicle", "boxes": boxes}] if detected else [])
-    fallback = Mock(return_value=boxes)
-    monkeypatch.setattr(media, "_blob_boxes", fallback)
-    monkeypatch.setattr(media, "_frame", lambda *args: image.copy())
-    result = media.track(tmp_path / "clip.mp4", 100, 80, min_track_move=minimum)
-    assert bool(result["tracks"]) == survives
-    assert result["track"] == (boxes if survives else [])
-    if detected:
-        fallback.assert_not_called()  # Never turn discarded parked cars into blob tracks.
-    else:
-        fallback.assert_called_once()
+def test_walk_then_pause():
+    boxes = [[0, 100, 100, 20, 20], [2, 140, 100, 20, 20], [4, 140, 100, 20, 20]]
+    assert _moved(boxes, 40)
+    assert not _moved(boxes, 41)
+
+
+def test_out_and_back():
+    boxes = [[0, 100, 100, 20, 20], [2, 150, 100, 20, 20], [4, 100, 100, 20, 20]]
+    assert _moved(boxes, 40)
+
+
+def test_parked_car_jitter():
+    boxes = [[frame, 100 + frame % 5, 100 + frame % 3, 100, 60] for frame in range(100)]
+    assert not _moved(boxes, 40)
+    assert _moved(boxes, 0)
+
+
+def test_centroid_bounds_diagonal():
+    # Changing box sizes moves the centroid by (24, 32), exactly 40 pixels.
+    assert _moved([[0, 100, 100, 20, 20], [2, 100, 100, 68, 84]], 40)
+    assert not _moved([[0, 100, 100, 20, 20]], 40)
+    assert not _moved([], 40)
