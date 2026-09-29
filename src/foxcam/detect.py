@@ -41,8 +41,11 @@ def load() -> cv2.dnn.Net:
             path.parent.mkdir(parents=True, exist_ok=True)
             temporary = path.with_name(".yolox.tmp")
             request.urlretrieve(MODEL_URL, temporary)
+            if sha256(temporary.read_bytes()).hexdigest() != MODEL_SHA256:
+                temporary.unlink()
+                raise ValueError(f"Model checksum mismatch: {temporary}")
             temporary.replace(path)
-        if sha256(path.read_bytes()).hexdigest() != MODEL_SHA256:
+        elif sha256(path.read_bytes()).hexdigest() != MODEL_SHA256:
             raise ValueError(f"Model checksum mismatch: {path}")
         _net = cv2.dnn.readNet(str(path))
     return _net
@@ -64,7 +67,8 @@ def detect(frame: np.ndarray) -> list[tuple[str, float, int, int, int, int]]:
     classes, confidences = scores.argmax(1), scores.max(1)
     keep = confidences >= CONFIDENCE
     boxes = (np.hstack([xy - wh / 2, wh])[keep] / ratio).round().astype(int)
-    kept = cv2.dnn.NMSBoxes(boxes.tolist(), confidences[keep].tolist(), CONFIDENCE, 0.5)
+    kept = cv2.dnn.NMSBoxesBatched(boxes.tolist(), confidences[keep].tolist(),
+                                   classes[keep].tolist(), CONFIDENCE, 0.5)
     return [(CLASSES[classes[keep][i]], float(confidences[keep][i]), *map(int, boxes[i]))
             for i in np.asarray(kept).flatten()]
 
@@ -78,7 +82,7 @@ def iou(a, b) -> float:
 
 def link(detections: list[tuple[int, list]], max_misses: int = 10) -> list[dict]:
     """Greedy same-class IoU linking; a track ends after max_misses consecutive processed frames."""
-    # ponytail: any overlap links; a 10 fps mover with missed detections still splits. Centroid distance or Kalman if so.
+    # ponytail: IoU only; use centroid distance or Kalman if fast movers still split.
     tracks, live = [], []
     for frame, found in detections:
         matched = set()
@@ -87,7 +91,7 @@ def link(detections: list[tuple[int, list]], max_misses: int = 10) -> list[dict]
             for track in live:
                 if track["class"] == name and id(track) not in matched:
                     score = iou(track["boxes"][-1][1:], box)
-                    if score > best_iou:
+                    if score >= 0.05 and score > best_iou:
                         best, best_iou = track, score
             if best is None:
                 best = {"id": len(tracks), "class": name, "boxes": [], "misses": 0}
