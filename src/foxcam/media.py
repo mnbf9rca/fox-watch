@@ -107,14 +107,15 @@ def _blob_boxes(video, min_blob_area: float, width: int) -> list[list[int]]:
     return boxes
 
 
-def _moved(boxes: list[list[int]], minimum: float) -> bool:
+def _moved(boxes: list[list[int]], ratio: float) -> bool:
     if not boxes:
         return False
     xs, ys = zip(*[(x + w / 2, y + h / 2) for _, x, y, w, h in boxes])
-    return math.hypot(max(xs) - min(xs), max(ys) - min(ys)) >= minimum
+    mean_size = sum(max(w, h) for _, x, y, w, h in boxes) / len(boxes)
+    return math.hypot(max(xs) - min(xs), max(ys) - min(ys)) >= max(20, ratio * mean_size)
 
 
-def track(clip: Path, min_blob_area: float, edge_margin: float, min_track_move: float = 40) -> dict:
+def track(clip: Path, min_blob_area: float, edge_margin: float, min_track_move_ratio: float = 0.75) -> dict:
     video = cv2.VideoCapture(str(clip))
     try:
         ok, image = video.read()
@@ -131,7 +132,7 @@ def track(clip: Path, min_blob_area: float, edge_margin: float, min_track_move: 
         if not tracks:
             boxes = _blob_boxes(video, min_blob_area, width)
             tracks = [{"id": 0, "class": "unknown", "boxes": boxes}] if boxes else []
-        tracks = [item for item in tracks if _moved(item["boxes"], min_track_move)]
+        tracks = [item for item in tracks if _moved(item["boxes"], min_track_move_ratio)]
         for item in tracks:
             item["labels"], item["description"] = {}, ""
             item["entry_edge"], item["exit_edge"] = [

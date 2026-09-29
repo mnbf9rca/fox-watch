@@ -7,17 +7,17 @@ import pytest
 from foxcam import pipeline
 
 
-@pytest.mark.parametrize("minimum", ["40", "12", "-1", "nan", "inf"])
+@pytest.mark.parametrize("minimum", ["0.75", "1.2", "-1", "nan", "inf"])
 def test_minimum_track_move_config(monkeypatch, minimum):
     monkeypatch.setenv("MODELS", "nous/a")
     monkeypatch.setenv("PRIMARY_MODEL", "nous/a")
-    monkeypatch.delenv("MIN_TRACK_MOVE", raising=False)
-    assert pipeline.load_config()["MIN_TRACK_MOVE"] == 40
-    monkeypatch.setenv("MIN_TRACK_MOVE", minimum)
-    if minimum in ("40", "12"):
-        assert pipeline.load_config()["MIN_TRACK_MOVE"] == float(minimum)
+    monkeypatch.delenv("MIN_TRACK_MOVE_RATIO", raising=False)
+    assert pipeline.load_config()["MIN_TRACK_MOVE_RATIO"] == .75
+    monkeypatch.setenv("MIN_TRACK_MOVE_RATIO", minimum)
+    if minimum in ("0.75", "1.2"):
+        assert pipeline.load_config()["MIN_TRACK_MOVE_RATIO"] == float(minimum)
     else:
-        with pytest.raises(ValueError, match="MIN_TRACK_MOVE"):
+        with pytest.raises(ValueError, match="MIN_TRACK_MOVE_RATIO"):
             pipeline.load_config()
 
 
@@ -45,7 +45,7 @@ def test_finish_retracks_without_old_labels_and_labels_empty_clips(tmp_path, mon
     hosted = Mock(return_value=("dog", .9, "a moving dog"))
     monkeypatch.setattr(pipeline, "classify", hosted)
     monkeypatch.setattr(pipeline, "annotate", lambda clip, target, *args: target.write_bytes(b"video"))
-    config = dict(PRIMARY_MODEL="nous/a", MODELS=["nous/a"], MIN_BLOB_AREA=100, EDGE_MARGIN=80, MIN_TRACK_MOVE=12)
+    config = dict(PRIMARY_MODEL="nous/a", MODELS=["nous/a"], MIN_BLOB_AREA=100, EDGE_MARGIN=80, MIN_TRACK_MOVE_RATIO=1.2)
     pipeline._finish(sidecar, config, date(2026, 1, 1))
     saved = json.loads(sidecar.read_text())
     assert saved["labels"]["nous/a"]["label"] == (name or "none")
@@ -56,4 +56,4 @@ def test_finish_retracks_without_old_labels_and_labels_empty_clips(tmp_path, mon
     else:
         hosted.assert_not_called()
     if legacy:
-        retrack.assert_called_once_with(directory / row["clip"], 100, 80, 12)
+        retrack.assert_called_once_with(directory / row["clip"], 100, 80, 1.2)

@@ -25,7 +25,7 @@ Fox Watch: a Raspberry Pi records the garden overnight, a VPS classifies what mo
 ## Gotchas
 
 - Detection runs in a 4-process pool with one OpenCV thread each (`WORKERS`); OpenCV alone would otherwise use every core per process. Watch `processed ... clip minutes` in `/data/foxcam/logs/*.log`; seconds per clip minute must stay below 60 or the 5 minute cron falls behind. Python buffers that log until the run exits.
-- COCO detector classes outside person, the five vehicle classes and seven animal classes are dropped; tracks whose centroid path spans under `MIN_TRACK_MOVE` pixels (parked cars) are dropped. `DETECT_CONFIDENCE` defaults to 0.5 and small or dim animals sit near it.
+- COCO detector classes outside person, the five vehicle classes and seven animal classes are dropped; tracks are kept only when their centroid-bounds diagonal is at least `MIN_TRACK_MOVE_RATIO` (default 0.75) times the mean `max(width, height)` of their boxes, with a 20 pixel absolute floor. `DETECT_CONFIDENCE` defaults to 0.5 and small or dim animals sit near it.
 
 - Together.ai's serverless vision models reject requests with more than one image, and its Qwen3-VL models need a paid dedicated endpoint. Together stays configured but out of `MODELS`.
 - Python's default urllib User-Agent is blocked by Together's Cloudflare front (HTTP 403 error 1010); `classify.py` sends its own.
