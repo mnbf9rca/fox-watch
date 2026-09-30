@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import math
 import subprocess
@@ -169,7 +170,13 @@ def track(clip: Path, min_blob_area: float, edge_margin: float, min_track_move_r
 TRACK_COLOURS = ((0, 255, 0), (255, 128, 0), (0, 128, 255), (255, 0, 255), (0, 255, 255))
 
 
-def annotate(clip: Path, target: Path, tracks: list[dict], captions: list[str]) -> None:
+def _timestamp(start_utc: datetime, frame: int, fps: float) -> str:
+    if start_utc.utcoffset() is None:
+        raise ValueError("start_utc must be an aware datetime")
+    return (start_utc.astimezone(timezone.utc) + timedelta(seconds=frame / fps)).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+
+def annotate(clip: Path, target: Path, tracks: list[dict], captions: list[str], start_utc: datetime) -> None:
     if target.exists():
         return
     video = cv2.VideoCapture(str(clip))
@@ -209,6 +216,9 @@ def annotate(clip: Path, target: Path, tracks: list[dict], captions: list[str]) 
                     # ponytail: redraw short clip paths; cache an overlay if long clips become costly.
                     if len(points[i]) > 1:
                         cv2.polylines(image, [np.asarray(points[i], dtype=np.int32)], False, colour, 2)
+                for ink, thickness in (((0, 0, 0), 4), ((255, 255, 255), 2)):
+                    cv2.putText(image, _timestamp(start_utc, frame, fps), (12, height - 12),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, ink, thickness, cv2.LINE_AA)
                 encoder.stdin.write(image.tobytes())
                 frame += 1
                 ok, image = video.read()

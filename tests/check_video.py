@@ -1,6 +1,7 @@
 """Exercise real video tools; pass a directory to retain the generated media."""
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 import subprocess
 import sys
@@ -17,6 +18,7 @@ from foxcam.media import annotate, cut, scan, track
 
 def check_video(directory: Path) -> None:
     directory.mkdir(parents=True, exist_ok=True)
+    start_utc = datetime(2026, 9, 30, 12, 34, 56, tzinfo=timezone.utc)
     source = directory / "moving.mp4"
     blank = directory / "blank.mp4"
     target = directory / "cut.mp4"
@@ -52,7 +54,7 @@ def check_video(directory: Path) -> None:
     assert len(result["frames"]) == 4
     assert all(cv2.imread(str(target.parent / name)) is not None for name in result["frames"])
     annotated = target.with_name("annotated.mp4")
-    annotate(target, annotated, result["tracks"], ["fox 90%"])
+    annotate(target, annotated, result["tracks"], ["fox 90%"], start_utc)
     output_stream = json.loads(subprocess.check_output(
         ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_streams",
          "-of", "json", str(annotated)], text=True,
@@ -60,6 +62,13 @@ def check_video(directory: Path) -> None:
     assert output_stream["codec_name"] == "h264"
     assert (output_stream["width"], output_stream["height"]) == (1280, 720)
     assert output_stream["nb_frames"] == stream["nb_frames"]
+    originals, rendered = cv2.VideoCapture(str(target)), cv2.VideoCapture(str(annotated))
+    source_ok, source_frame = originals.read()
+    output_ok, output_frame = rendered.read()
+    assert source_ok and output_ok
+    assert cv2.absdiff(source_frame[-45:, :360], output_frame[-45:, :360]).mean() > 5
+    originals.release()
+    rendered.release()
     empty = track(blank, min_blob_area=100, edge_margin=80)
     assert empty["track"] == [] and empty["entry_edge"] == empty["exit_edge"] == "unknown"
     assert [t["class"] for t in result["tracks"]] == ["unknown"]
@@ -76,7 +85,7 @@ def check_video(directory: Path) -> None:
     crop = cv2.imread(str(animal.with_name("animal.t0.crop.jpg")))
     assert crop is not None and crop.shape[0] < 720
     annotated_animal = directory / "animal.annotated.mp4"
-    annotate(animal, annotated_animal, animal_result["tracks"], ["dog 65%"] * len(animal_result["tracks"]))
+    annotate(animal, annotated_animal, animal_result["tracks"], ["dog 65%"] * len(animal_result["tracks"]), start_utc)
     counts = []
     for path in (animal, annotated_animal):
         video = cv2.VideoCapture(str(path))
@@ -87,7 +96,7 @@ def check_video(directory: Path) -> None:
     multi = directory / "multi.annotated.mp4"
     tracks = [dict(id=0, boxes=[[1, 100, 100, 50, 50], [5, 120, 100, 50, 50]]),
               dict(id=1, boxes=[[3, 300, 300, 50, 50], [7, 320, 300, 50, 50]])]
-    annotate(blank, multi, tracks, ["dog 80%", "person 100%"])
+    annotate(blank, multi, tracks, ["dog 80%", "person 100%"], start_utc)
     video = cv2.VideoCapture(str(multi))
     colours = []
     for frame in range(9):
@@ -100,10 +109,20 @@ def check_video(directory: Path) -> None:
             colours = [image[100, 100].astype(int), image[300, 300].astype(int)]
     video.release()
     assert abs(colours[0] - colours[1]).max() > 60
+    stamped_blank = directory / "blank.annotated.mp4"
+    annotate(blank, stamped_blank, [], [], start_utc)
+    originals, rendered = cv2.VideoCapture(str(blank)), cv2.VideoCapture(str(stamped_blank))
+    for _ in range(int(originals.get(cv2.CAP_PROP_FRAME_COUNT))):
+        source_ok, source_frame = originals.read()
+        output_ok, output_frame = rendered.read()
+        assert source_ok and output_ok
+        assert cv2.absdiff(source_frame[-45:, :360], output_frame[-45:, :360]).mean() > 5
+    originals.release()
+    rendered.release()
     print(f"PASS: moving/static/truncated scan; H.264 cut {duration:.1f}s; "
           f"left → far track; four JPEGs; annotated 1280x720 H.264 ({output_stream['nb_frames']} frames); "
           f"sprite tracks {classes} with {len(animal_result['tracks'][0]['boxes'])} boxes; "
-          f"per-track overlays, held boxes and lifetimes")
+          f"per-track overlays, held boxes and lifetimes; UTC timestamps including every trackless frame")
 
 
 if __name__ == "__main__":

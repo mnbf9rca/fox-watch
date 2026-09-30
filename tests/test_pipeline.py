@@ -56,7 +56,7 @@ def test_finish_retracks_without_old_labels_and_labels_empty_clips(tmp_path, mon
     if legacy:
         del row["tracks"]
     else:
-        row.update(annotation_label=[], annotation_version=2)
+        row.update(annotation_label=[], annotation_version=3)
     sidecar.write_text(json.dumps(row))
     for filename in [row["clip"], *frames, "20-00-00.t0.jpg", "20-00-00.t0.crop.jpg", "20-00-00.annotated.mp4"]:
         (directory / filename).touch()

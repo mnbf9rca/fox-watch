@@ -1,6 +1,18 @@
+from datetime import datetime
+
 import pytest
 
-from foxcam.media import _moved
+from foxcam.media import _moved, _timestamp
+
+
+def test_per_frame_utc_timestamp():
+    start = datetime.fromisoformat("2026-09-30T12:34:56+00:00")
+    assert _timestamp(start, 0, 10) == "2026-09-30 12:34:56 UTC"
+    assert _timestamp(start, 15, 10) == "2026-09-30 12:34:57 UTC"
+    assert _timestamp(datetime.fromisoformat("2026-09-30T23:59:59+00:00"), 15, 10) == "2026-10-01 00:00:00 UTC"
+    assert _timestamp(datetime.fromisoformat("2026-09-30T13:34:56+01:00"), 0, 10) == "2026-09-30 12:34:56 UTC"
+    with pytest.raises(ValueError, match="aware"):
+        _timestamp(datetime(2026, 9, 30), 0, 10)
 
 
 @pytest.mark.parametrize("width, height, span, expected", [

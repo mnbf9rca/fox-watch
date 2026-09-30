@@ -172,17 +172,18 @@ def _finish(sidecar: Path, config: dict, cutoff: date) -> None:
             _save(sidecar, row)
     desired = [[item["labels"].get(primary_model, UNCLASSIFIED)["label"],
                 item["labels"].get(primary_model, UNCLASSIFIED)["confidence"]] for item in row["tracks"]]
-    if not annotated.exists() or row.get("annotation_label") != desired or row.get("annotation_version") != 2:
+    if not annotated.exists() or row.get("annotation_label") != desired or row.get("annotation_version") != 3:
         if clip.exists():
             temporary = annotated.with_name("." + annotated.stem + ".refresh.mp4")
             temporary.unlink(missing_ok=True)
-            annotate(clip, temporary, row["tracks"], [f"{label} {confidence:.0%}" for label, confidence in desired])
+            annotate(clip, temporary, row["tracks"], [f"{label} {confidence:.0%}" for label, confidence in desired],
+                     datetime.fromisoformat(row["start_utc"]))
             os.replace(temporary, annotated)
         elif not annotated.exists():
             raise FileNotFoundError(f"Missing raw and annotated clip: {clip}")
         # Expired raw: preserve the existing video and acknowledge the desired labels.
         row["annotation_label"] = desired
-        row["annotation_version"] = 2
+        row["annotation_version"] = 3
         _save(sidecar, row)
     if (date.fromisoformat(row["night"]) < cutoff
             and all(item["labels"].get(model, UNCLASSIFIED)["label"] != "unclassified"
