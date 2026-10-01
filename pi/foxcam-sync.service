@@ -8,3 +8,4 @@ Type=oneshot
 User=rob
 EnvironmentFile=/etc/foxcam.env
 ExecStart=/opt/foxcam-pi/sync.sh
+TimeoutStartSec=30min
