@@ -48,9 +48,10 @@ while :; do
     [[ ! -e $final ]] || { echo "Capture already exists: $final" >&2; exit 1; }
     raw="$RECORDINGS_DIR/.$stamp.$$.h264"
     mp4="$RECORDINGS_DIR/.$stamp.$$.mp4"
-    rpicam-vid --nopreview --width 1280 --height 720 --framerate 10 --codec h264 \
+    # shellcheck disable=SC2086  # CAMERA_ARGS is a deliberate word-split list of extra rpicam-vid flags
+    rpicam-vid --nopreview --width "${WIDTH:-1280}" --height "${HEIGHT:-720}" --framerate 10 --codec h264 \
         --inline --intra 10 --bitrate "${BITRATE:-3000000}" --timeout "$((seconds * 1000))" --shutter "$SHUTTER_US" --gain "$GAIN" \
-        --awbgains "$AWB_GAINS" --output "$raw" &
+        --awbgains "$AWB_GAINS" ${CAMERA_ARGS:-} --output "$raw" &
     child=$!
     wait "$child"
     child=''
