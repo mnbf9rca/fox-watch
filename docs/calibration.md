@@ -93,14 +93,9 @@ Camera stills at 2304x1296 with the recorder's settings, and phone photos of the
 ## Lawn and patio motion mask
 
 `motion_polygon` in `vps/ground-calibration.json` uses 1920×1080 recording
-coordinates. It covers the lawn and stepping stones, the steps up to the
-patio, and the area around the table and chairs. The table rectangle is
-retained. Former vertices 8, 9 and 10 were removed, connecting former vertex
-7 directly to 11; the current overlays renumber the remaining vertices.
-Some door glazing is intentionally included, as accepted by the operator.
-Detector tracks remain unrestricted. Beds, shrubs, mulch and
-foreground plant silhouettes are excluded, including plants projecting over
-the near-left grass. The foreground outline is conservative around stems.
+coordinates. It covers the lawn, steps, patio and table area, with the
+near-left corner inside and straight boundary segments through (470,922),
+(250,950), (0,980) and (0,495).
 
 Only unknown motion blobs are filtered by their box bottom-centre; detector
 tracks remain unrestricted. The polygon scales with full-field recordings.
@@ -115,7 +110,9 @@ The original lawn-only overlays are preserved byte-for-byte from `b77ad4b`:
 - [Original night mask, 09](calibration/09-motion-mask-night.jpg)
 
 Current numbered vertices correspond to JSON order; still coordinates are
-recording coordinates multiplied by 6/5:
+recording coordinates multiplied by 6/5. The day source remains
+`.research/lawn-still-2304.jpg`; the night source is now
+`.research/lawn-night-flood-moved-2304.jpg`, showing the relocated flood:
 
 - [Current lawn/patio day mask, 11](calibration/11-motion-mask-day.jpg)
 - [Current lawn/patio night mask, 12](calibration/12-motion-mask-night.jpg)

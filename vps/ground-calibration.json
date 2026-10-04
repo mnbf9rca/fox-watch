@@ -45,38 +45,6 @@
       290
     ],
     [
-      1140,
-      310
-    ],
-    [
-      1000,
-      310
-    ],
-    [
-      960,
-      295
-    ],
-    [
-      850,
-      295
-    ],
-    [
-      800,
-      315
-    ],
-    [
-      765,
-      350
-    ],
-    [
-      760,
-      390
-    ],
-    [
-      980,
-      380
-    ],
-    [
       1130,
       374
     ],
@@ -121,67 +89,19 @@
       922
     ],
     [
-      390,
-      850
-    ],
-    [
-      330,
-      720
-    ],
-    [
-      285,
-      575
-    ],
-    [
-      255,
-      565
-    ],
-    [
-      270,
-      640
-    ],
-    [
-      180,
-      625
-    ],
-    [
-      165,
-      580
-    ],
-    [
-      130,
-      590
-    ],
-    [
-      150,
-      650
-    ],
-    [
-      100,
-      625
+      250,
+      950
     ],
     [
       0,
-      600
-    ],
-    [
-      0,
-      530
-    ],
-    [
-      95,
-      525
-    ],
-    [
-      90,
-      505
+      980
     ],
     [
       0,
       495
     ]
   ],
-  "motion_polygon_note": "Original lawn/patio mask with vertices 8, 9 and 10 removed, connecting former vertex 7 directly to 11; table rectangle retained. Some door glazing is intentionally included. Detector tracks unrestricted; patio ground positions approximate or null beyond 12 m.",
+  "motion_polygon_note": "Lawn, stepping stones and patio steps; former vertex 7 connects directly to former 17 at the shrub foot, excluding the table and door glazing. Near-left lawn extends to the edging with straight edges after the flood relocation. Night reference: .research/lawn-night-flood-moved-2304.jpg. Detector tracks unrestricted; patio positions approximate or null beyond 12 m.",
   "measurement_image_size": [
     2304,
     1296

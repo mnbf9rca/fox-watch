@@ -9,7 +9,7 @@ import numpy as np
 root = Path(__file__).resolve().parents[1]
 calibration = json.loads((root / "vps/ground-calibration.json").read_text())
 for source, target in (("lawn-still-2304.jpg", "11-motion-mask-day.jpg"),
-                       ("lawn-night-flood-2304.jpg", "12-motion-mask-night.jpg")):
+                       ("lawn-night-flood-moved-2304.jpg", "12-motion-mask-night.jpg")):
     image = cv2.imread(str(root / ".research" / source))
     if image is None:
         raise FileNotFoundError(source)
