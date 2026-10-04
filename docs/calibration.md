@@ -126,10 +126,11 @@ Pixel positions are the measured spots in the full-sensor still `docs/calibratio
 | 7 | Stepping stone, right end | 472, 671 | -21.0° | 3.222 m | 46.0 cm | -37.0 cm | -1.15 | 2.99 |
 | 6 | Stepping stone, right end | 679, 601 | -14.9° | 4.279 m | 43.0 cm | -34.0 cm | -1.10 | 4.12 |
 | 4 | Right lawn edge, on the edging | 2050, 506 | +26.8° | 4.270 m | 35.0 cm | -26.0 cm | +1.92 | 3.80 |
-| 5 | Far stepping stone (pixel marks the farther of two slabs) | 863, 518 | -9.3° | 6.014 m nearer slab, 6.747 m farther slab | 35.0 cm nearer, 28.5 cm farther (pairing assumed, unconfirmed) | −26.0 / −19.5 cm | | |
+| 5 | Far stepping stone, right end (the farther of two slabs) | 863, 518 | -9.3° | 6.747 m | 28.5 cm | -19.5 cm | -1.08 | 6.66 |
+| 5a | Next stepping stone towards the camera, right end; not marked in the still | | | 6.014 m | 35.0 cm | -26.0 cm | | |
 | 9 | Left lawn edge | 161, 581 | -29.2° | 6.775 m | 43.0 cm | -34.0 cm | -3.30 | 5.91 |
 | 3 | Far right lawn corner | 1716, 443 | +17.6° | 8.090 m | 19.0 cm | -10.0 cm | +2.45 | 7.71 |
 | 1 | Bottom of patio steps, left end | 696, 460 | -14.4° | 9.449 m | 19.0 cm | -10.0 cm | -2.35 | 9.15 |
 | 2 | Base of patio wall, centre | 1290, 444 | +4.4° | 9.549 m | 8.8 cm | +0.2 cm | +0.74 | 9.52 |
 
-The lawn rises about 28 cm from the near stepping stones to the far corners, roughly 3 percent, and the right side sits about 8 cm higher than the left at similar distances. The patio wall base is level with the lens, about 10 cm above the far lawn corners. Point 5 is excluded from fits until the pairing of its two readings with the two slabs is confirmed.
+The lawn rises about 28 cm from the near stepping stones to the far corners, roughly 3 percent, and the right side sits about 8 cm higher than the left at similar distances. The patio wall base is level with the lens, about 10 cm above the far lawn corners. Point 5's pairing was confirmed by the user: the farther slab is 6.747 m with the line 28.5 cm above it, the nearer 6.014 m with 35.0 cm. Point 5a has no marked pixel; locate its right-hand end in the still before using its position, or use its elevation only.
