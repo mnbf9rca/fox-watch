@@ -97,6 +97,56 @@ def check_calendar_boundary(data, env, fixture):
     print("PASS: padded midnight capture stays in its local calendar day")
 
 
+def check_rejected_inputs(data, env, fixture):
+    incoming = data / "incoming"
+    incoming.mkdir(parents=True)
+    source = incoming / "2000-01-01T20-00-00Z.mp4"
+    source.write_bytes(b"not a video")
+    for attempt in range(1, 4):
+        result = cli(data, env, "run")
+        if attempt < 3:
+            assert result.returncode != 0 and source.exists(), result.stderr
+        else:
+            assert not source.exists(), "undecodable input still present after three runs"
+            passed(result)
+            assert result.stderr.count("Rejected") == 1, result.stderr
+    rejected = incoming / "rejected"
+    original = rejected / source.name
+    assert original.read_bytes() == b"not a video"
+    os.utime(original, (0, 0))
+    # A new top-level upload with the same basename must not touch the archive.
+    # Successful decoding resets the count even if --night leaves the input queued.
+    source.touch()
+    for _ in range(2):
+        assert cli(data, env, "run").returncode != 0
+        assert source.exists()
+    shutil.copyfile(fixture, source)
+    passed(cli(data, env, "run", "--night", "2099-01-01"))
+    assert source.exists() and original.read_bytes() == b"not a video"
+    source.write_bytes(b"")
+    for attempt in range(1, 4):
+        result = cli(data, env, "run")
+        if attempt < 3:
+            assert result.returncode != 0 and source.exists(), "decode failure count was not reset"
+        else:
+            passed(result)
+            assert not source.exists() and result.stderr.count("Rejected") == 1
+    archived = media_state(rejected)
+    assert len(archived) == 2 and original.read_bytes() == b"not a video", archived
+    result = cli(data, env, "run", RETAIN_NIGHTS="0")
+    passed(result)
+    assert source.name not in result.stderr and "ERROR" not in result.stderr, result.stderr
+    assert media_state(rejected) == archived, "rejected input was retried or expired"
+    # Filename/configuration errors are not evidence of undecodable video.
+    invalid_name = incoming / "invalid-name.mp4"
+    shutil.copyfile(fixture, invalid_name)
+    for _ in range(3):
+        assert cli(data, env, "run").returncode != 0
+        assert invalid_name.exists() and media_state(rejected) == archived
+    print("PASS: reject after 3 decode failures, reset on success, preserve collisions, "
+          "ignore rejected uploads/retention, and retain non-decode errors")
+
+
 def check(data, live=False):
     env = os.environ.copy()
     root = Path(__file__).resolve().parents[1]
@@ -125,6 +175,7 @@ def check(data, live=False):
     fixture = data / "fixture.mp4"
     make_video(fixture)
     if not live:
+        check_rejected_inputs(data / "rejected-check", env, fixture)
         check_calendar_boundary(data / "boundary-check", env, fixture)
     source = incoming / stamp.strftime("%Y-%m-%dT%H-%M-%SZ.mp4")
     shutil.copyfile(fixture, source)

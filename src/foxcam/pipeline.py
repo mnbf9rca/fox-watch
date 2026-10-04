@@ -213,9 +213,29 @@ def run(data_dir: Path, night: str | None = None) -> None:
                  for source in sorted(incoming.glob("*.mp4"))}
         jobs = {}
         for source, scanned in scans.items():
+            retry = source.with_name("." + source.name + ".failures")
             try:
+                try:
+                    events = scanned.result()
+                except ValueError as exc:
+                    # scan rejects unreadable frames/invalid fps; later processing errors do not count.
+                    attempts = (json.loads(retry.read_text()) if retry.exists() else 0) + 1
+                    _save(retry, attempts)
+                    if attempts < 3:
+                        raise
+                    # Pi uploads only top-level *.mp4; this archive is never scanned or expired.
+                    rejected = incoming / "rejected"
+                    rejected.mkdir(exist_ok=True)
+                    target, suffix = rejected / source.name, 1
+                    while os.path.lexists(target):
+                        target = rejected / f"{source.stem}.{suffix}.mp4"
+                        suffix += 1
+                    source.rename(target)
+                    retry.unlink()
+                    logging.warning("Rejected %s after %d decode failures: %s", target, attempts, exc)
+                    continue
+                retry.unlink(missing_ok=True)
                 captured = datetime.strptime(source.name, "%Y-%m-%dT%H-%M-%SZ.mp4").replace(tzinfo=timezone.utc)
-                events = scanned.result()
                 minutes += duration(source) / 60
             except Exception as exc:
                 logging.error("Input %s: %s: %s", source.name, type(exc).__name__, exc)
