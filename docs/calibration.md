@@ -90,29 +90,33 @@ Camera stills at 2304x1296 with the recorder's settings, and phone photos of the
 - [Cross tape looking back towards the camera](calibration/07-cross-tape-looking-back-to-camera.jpg)
 
 
-## Lawn motion mask
+## Lawn and patio motion mask
 
-`motion_polygon` in `vps/ground-calibration.json` uses the calibration's
-1920×1080 image coordinates. It follows the lawn from the near metal edging
-to the foot of the patio steps/wall, inside the left and right bed edges.
-The lower-left cutout excludes foreground stems projecting over the lawn;
-the narrow far-left strip is excluded because the night still shows a bright
-overhanging leaf there. This deliberately leaves the occluded grass out.
+`motion_polygon` in `vps/ground-calibration.json` uses 1920×1080 recording
+coordinates. It covers the lawn and stepping stones, the steps up to the
+patio, and the area around the table and chairs. Beds, shrubs, mulch and
+foreground plant silhouettes are excluded, including plants projecting over
+the near-left grass. The foreground outline is conservative around stems.
 
-Only unknown motion blobs are filtered: their box bottom-centre must be
-inside or on the polygon. Detector tracks are unrestricted. The polygon
-scales with full-field recording dimensions; initial motion screening is
-unchanged. A calibration without `motion_polygon` keeps unmasked fallback.
-Existing tracks are unchanged until explicitly re-tracked. Redraw this mask
-if the camera moves or plants grow across its boundary.
+Only unknown motion blobs are filtered by their box bottom-centre; detector
+tracks remain unrestricted. The polygon scales with full-field recordings.
+Existing tracks are unchanged until explicitly re-tracked. Redraw after
+camera movement or plant growth. Patio and step positions are approximate
+because the ground model describes the lawn; the 12 m forward cap remains,
+so some patio detections have null ground positions while still being tracked.
 
-The numbered vertices on these exact overlays correspond to JSON order;
-the 2304×1296 still coordinates are recording coordinates multiplied by 6/5:
+The original lawn-only overlays are preserved byte-for-byte from `b77ad4b`:
 
-- [Day motion-mask overlay](calibration/08-motion-mask-day.jpg)
-- [Night motion-mask overlay](calibration/09-motion-mask-night.jpg)
+- [Original day mask, 08](calibration/08-motion-mask-day.jpg)
+- [Original night mask, 09](calibration/09-motion-mask-night.jpg)
 
-Regenerate both overlays with `.venv/bin/python tests/render_motion_mask.py`.
+Current numbered vertices correspond to JSON order; still coordinates are
+recording coordinates multiplied by 6/5:
+
+- [Current lawn/patio day mask, 11](calibration/11-motion-mask-day.jpg)
+- [Current lawn/patio night mask, 12](calibration/12-motion-mask-night.jpg)
+
+Regenerate **11 and 12 only** with `.venv/bin/python tests/render_motion_mask.py`.
 
 ## Laser survey, 2026-10-04 evening
 
@@ -208,8 +212,5 @@ Plane elevation residuals (fitted minus surveyed), in metres:
 
 Reproduce both fits and residual sets with `.venv/bin/python tests/fit_ground.py`.
 
-The motion mask was also extended to the whole near-left lawn and stepping
-stones, down to the metal edging. This supersedes the earlier conservative
-cutout described above: grass behind overhanging stems is now included; beds,
-shrubs, patio and foreground mulch remain outside. The linked day/night
-overlays (08 and 09) show the updated numbered vertices.
+The subsequent lawn/patio mask revision is documented above. Overlays 08/09
+retain the original lawn-only mask; 11/12 show the current polygon.

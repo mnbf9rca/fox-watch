@@ -8,8 +8,8 @@ import numpy as np
 
 root = Path(__file__).resolve().parents[1]
 calibration = json.loads((root / "vps/ground-calibration.json").read_text())
-for source, target in (("lawn-still-2304.jpg", "08-motion-mask-day.jpg"),
-                       ("lawn-night-flood-2304.jpg", "09-motion-mask-night.jpg")):
+for source, target in (("lawn-still-2304.jpg", "11-motion-mask-day.jpg"),
+                       ("lawn-night-flood-2304.jpg", "12-motion-mask-night.jpg")):
     image = cv2.imread(str(root / ".research" / source))
     if image is None:
         raise FileNotFoundError(source)
@@ -26,7 +26,7 @@ for source, target in (("lawn-still-2304.jpg", "08-motion-mask-day.jpg"),
         for color, thickness in (((0, 0, 0), 5), ((255, 255, 255), 2)):
             cv2.putText(image, str(index), position, cv2.FONT_HERSHEY_SIMPLEX, .8, color, thickness, cv2.LINE_AA)
     cv2.rectangle(image, (10, 10), (1090, 68), (0, 0, 0), -1)
-    cv2.putText(image, "Unknown motion mask: bottom-centre inside cyan lawn; detector tracks unrestricted",
+    cv2.putText(image, "Unknown motion mask: bottom-centre inside cyan area; detector tracks unrestricted",
                 (22, 48), cv2.FONT_HERSHEY_SIMPLEX, .7, (255, 255, 255), 2, cv2.LINE_AA)
     destination = root / "docs/calibration" / target
     if not cv2.imwrite(str(destination), image, [cv2.IMWRITE_JPEG_QUALITY, 95]):

@@ -557,8 +557,64 @@
       410
     ],
     [
-      590,
-      395
+      580,
+      385
+    ],
+    [
+      565,
+      365
+    ],
+    [
+      565,
+      315
+    ],
+    [
+      720,
+      300
+    ],
+    [
+      815,
+      300
+    ],
+    [
+      850,
+      280
+    ],
+    [
+      850,
+      175
+    ],
+    [
+      1190,
+      175
+    ],
+    [
+      1195,
+      290
+    ],
+    [
+      1140,
+      310
+    ],
+    [
+      1000,
+      310
+    ],
+    [
+      960,
+      295
+    ],
+    [
+      850,
+      295
+    ],
+    [
+      800,
+      315
+    ],
+    [
+      765,
+      350
     ],
     [
       760,
@@ -613,19 +669,67 @@
       922
     ],
     [
-      250,
-      950
+      390,
+      850
+    ],
+    [
+      330,
+      720
+    ],
+    [
+      285,
+      575
+    ],
+    [
+      255,
+      565
+    ],
+    [
+      270,
+      640
+    ],
+    [
+      180,
+      625
+    ],
+    [
+      165,
+      580
+    ],
+    [
+      130,
+      590
+    ],
+    [
+      150,
+      650
+    ],
+    [
+      100,
+      625
     ],
     [
       0,
-      980
+      600
+    ],
+    [
+      0,
+      530
+    ],
+    [
+      95,
+      525
+    ],
+    [
+      90,
+      505
     ],
     [
       0,
       495
     ]
   ],
-  "motion_polygon_note": "Whole lawn including near-left wedge and stepping stones, to metal edging; excludes beds, shrubs, patio and foreground mulch. Grass behind overhanging stems remains included. Coordinates at 1920x1080; detector tracks unrestricted.",
+  "motion_polygon_note": "Lawn, stepping stones, patio steps and area around table/chairs. Excludes beds, shrubs, mulch and foreground plant silhouettes. Image-space mask only; raised patio ground positions are approximate or null beyond 12 m.",
   "model": "pinhole_plane",
   "camera": {
     "focal_length_px": 1478.3333333333333,
