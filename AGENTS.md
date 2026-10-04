@@ -2,6 +2,10 @@
 
 Fox Watch: a Raspberry Pi records the garden overnight, a VPS classifies what moved, a private page shows the results. Design: `docs/superpowers/specs/2026-09-28-fox-cam-design.md`. Plan: `docs/superpowers/plans/2026-09-28-fox-cam.md`. Operator runbook: `README.md`.
 
+## Scope
+
+- Target: anything that moves on the ground in the patch, day or night, named at a high level (fox, hedgehog, cat, badger, bird, person and so on). Birds count when on the ground, walking or foraging, which is well under 1 m/s with occasional short hops. Birds in flight are out of scope: the camera is mounted low, and 10 fps is kept for night exposure rather than raised for fast movers. Do not tune detection, tracking or frame rate for flying birds.
+
 ## Hosts
 
 - Pi: `rob@10.0.2.138`, hostname `fox-watch`, passwordless sudo. Wired over PoE on the IoT VLAN 3000 (Zyxel PoE switch port 6, DHCP reservation 10.0.2.138); Wi-Fi stays on as a fallback, joined to the IoT network, not the main LAN. OPNsense allows main to IoT but not IoT to main; IoT egress is an allow-list, and the Pi has a rule allowing TCP 22 out for the VPS sync (alias `IOT_SSH_HOSTS`, wired 10.0.2.138 and Wi-Fi 10.0.2.102; the Wi-Fi profile `iot-wifi` joins the IoT SSID as a fallback, the old main-LAN profile has autoconnect off). ufw on the Pi denies incoming except SSH from 192.168.17.0/24 and 10.0.2.0/24; when changing it, schedule `systemd-run --on-active=180 /usr/sbin/ufw disable` first as a lockout safety net. Recorder files under `/opt/foxcam-pi`, config `/etc/foxcam.env`, recordings `/home/rob/foxcam-recordings`.
