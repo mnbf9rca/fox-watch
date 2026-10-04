@@ -1,0 +1,252 @@
+{
+  "source": "docs/calibration.md, 2026-10-04 Camera Module 3 NoIR; fixed garden view",
+  "image_size": [
+    1920,
+    1080
+  ],
+  "measurement_image_size": [
+    2304,
+    1296
+  ],
+  "measurement_to_recording_scale": [
+    5,
+    6
+  ],
+  "axes": "Camera (0,0); across positive right, forward along camera axis, metres",
+  "limitations": "Ground-plane estimate, invalid for airborne birds; repeat if camera moves",
+  "homography": [
+    [
+      -0.0018800102341697514,
+      -0.0004799779314600362,
+      1.9753154322793236
+    ],
+    [
+      6.637704673488177e-05,
+      0.004030954997903642,
+      -4.5086178815153755
+    ],
+    [
+      -0.00020601582833871312,
+      -0.002984825561864521,
+      0.9999999999999999
+    ]
+  ],
+  "fit": {
+    "method": "OpenCV findHomography method=0, least squares using all eight pairs",
+    "rms_radial_m": 0.20386015059160248,
+    "max_radial_m": 0.3049634948764898
+  },
+  "patch_outline_m": [
+    [
+      -3.9344510220439965,
+      1.0770771351843607
+    ],
+    [
+      -3.376399232090994,
+      9.057589537262954
+    ],
+    [
+      4.604113169987599,
+      8.499537747309953
+    ],
+    [
+      4.0460613800345975,
+      0.5190253452313582
+    ]
+  ],
+  "patch_outline_note": "Approximate 8 m square, centre line 4 degrees right, far edge at 8.8 m; corners not surveyed",
+  "points": [
+    {
+      "name": "Tape at 2 m",
+      "image_measurement_px": [
+        881.0,
+        735.0
+      ],
+      "image_recording_px": [
+        734.1666666666667,
+        612.5
+      ],
+      "measured_ground_m": [
+        -0.3,
+        1.98
+      ],
+      "fitted_ground_m": [
+        -0.30740351995295867,
+        2.0326864317074564
+      ],
+      "residual_m": [
+        -0.0074035199529586815,
+        0.05268643170745646
+      ],
+      "radial_error_m": 0.05320406181635318
+    },
+    {
+      "name": "Tape at 4 m",
+      "image_measurement_px": [
+        858.0,
+        582.0
+      ],
+      "image_recording_px": [
+        715.0,
+        485.0
+      ],
+      "measured_ground_m": [
+        -0.65,
+        3.95
+      ],
+      "fitted_ground_m": [
+        -0.6695089757593858,
+        4.212421245500298
+      ],
+      "residual_m": [
+        -0.019508975759385816,
+        0.2624212455002981
+      ],
+      "radial_error_m": 0.26314541650028417
+    },
+    {
+      "name": "Cross point",
+      "image_measurement_px": [
+        847.0,
+        593.0
+      ],
+      "image_recording_px": [
+        705.8333333333334,
+        494.1666666666667
+      ],
+      "measured_ground_m": [
+        -0.71,
+        4.15
+      ],
+      "fitted_ground_m": [
+        -0.6627064452542609,
+        3.980894383255009
+      ],
+      "residual_m": [
+        0.04729355474573904,
+        -0.16910561674499114
+      ],
+      "radial_error_m": 0.17559439038645866
+    },
+    {
+      "name": "Middle right",
+      "image_measurement_px": [
+        1874.0,
+        514.0
+      ],
+      "image_recording_px": [
+        1561.6666666666667,
+        428.33333333333337
+      ],
+      "measured_ground_m": [
+        1.84,
+        4.54
+      ],
+      "fitted_ground_m": [
+        1.9429679743017056,
+        4.462246309575976
+      ],
+      "residual_m": [
+        0.10296797430170557,
+        -0.07775369042402414
+      ],
+      "radial_error_m": 0.12902728434851166
+    },
+    {
+      "name": "Left",
+      "image_measurement_px": [
+        156.0,
+        582.0
+      ],
+      "image_recording_px": [
+        130.0,
+        485.0
+      ],
+      "measured_ground_m": [
+        -3.03,
+        5.41
+      ],
+      "fitted_ground_m": [
+        -3.157786459505688,
+        5.364366006761478
+      ],
+      "residual_m": [
+        -0.12778645950568812,
+        -0.04563399323852213
+      ],
+      "radial_error_m": 0.1356902375703291
+    },
+    {
+      "name": "Rear right",
+      "image_measurement_px": [
+        1597.0,
+        439.0
+      ],
+      "image_recording_px": [
+        1330.8333333333335,
+        365.83333333333337
+      ],
+      "measured_ground_m": [
+        2.07,
+        8.24
+      ],
+      "fitted_ground_m": [
+        1.9180980673630719,
+        8.04548234795876
+      ],
+      "residual_m": [
+        -0.15190193263692797,
+        -0.19451765204123994
+      ],
+      "radial_error_m": 0.24680217603268959
+    },
+    {
+      "name": "Rear left",
+      "image_measurement_px": [
+        723.0,
+        484.0
+      ],
+      "image_recording_px": [
+        602.5,
+        403.33333333333337
+      ],
+      "measured_ground_m": [
+        -2.13,
+        8.8
+      ],
+      "fitted_ground_m": [
+        -1.978688708930401,
+        8.66698465932592
+      ],
+      "residual_m": [
+        0.15131129106959884,
+        -0.13301534067408127
+      ],
+      "radial_error_m": 0.20146510283369365
+    },
+    {
+      "name": "Back of grass, centre line",
+      "image_measurement_px": [
+        1281.0,
+        444.0
+      ],
+      "image_recording_px": [
+        1067.5,
+        370.0
+      ],
+      "measured_ground_m": [
+        0.64,
+        8.78
+      ],
+      "fitted_ground_m": [
+        0.6450280092117381,
+        9.084922043038297
+      ],
+      "residual_m": [
+        0.0050280092117380715,
+        0.30492204303829773
+      ],
+      "radial_error_m": 0.3049634948764898
+    }
+  ]
+}

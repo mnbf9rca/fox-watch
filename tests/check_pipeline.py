@@ -154,6 +154,7 @@ def check(data, live=False, benchmark=False):
     for assignment in shlex.split((root / "vps/foxcam.env.example").read_text(), comments=True):
         key, value = assignment.split("=", 1)
         env.setdefault(key, value)
+    env["GROUND_CALIBRATION"] = str(root / "vps/ground-calibration.json")
     env.update(MIN_FREE_GB="0", EDGE_MARGIN="120" if benchmark else "80", GAP_SECONDS="3",
                PAD_SECONDS="2", RETAIN_NIGHTS="180", START_TIME="19:00", STOP_TIME="07:00", TZ="Europe/London")
     if not live:
@@ -197,6 +198,11 @@ def check(data, live=False, benchmark=False):
     playable(annotated)
     assert row["tracks"][0]["class"] == "unknown" and row["tracks"][0]["labels"] == row["labels"], row["tracks"]
     throughput = [line for line in completed_run.stderr.splitlines() if "per clip minute" in line]
+    for item in row["tracks"]:
+        assert len(item["ground_track"]) == len(item["boxes"])
+        assert [point[0] for point in item["ground_track"]] == [box[0] for box in item["boxes"]]
+        assert any(point[1] is not None for point in item["ground_track"])
+    assert "Ground paths" in (data / "site" / f"{night}.html").read_text()
     assert len(throughput) == 1, completed_run.stderr
     seconds_per_minute = float(throughput[0].rsplit("(", 1)[1].split()[0])
     print(f"{throughput[0]}; real-time ratio {seconds_per_minute / 60:.2f}")

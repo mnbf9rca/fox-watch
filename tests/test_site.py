@@ -16,7 +16,7 @@ def test_pages_from_sidecars():
                  labels={"nous/a": {"label": "fox", "confidence": 0.9},
                          "deepinfra/b": {"label": "cat", "confidence": 0.7}})
     html = render_night("2026-09-28", [visit], "nous/a")
-    for text in ("Fox Watch", "fox", "cat", "left", "far", "19-05-00.f3.jpg", "19-05-00.annotated.mp4", "<svg", "marker-end"):
+    for text in ("Fox Watch", "fox", "cat", "left", "far", "19-05-00.f3.jpg", "19-05-00.annotated.mp4", "<svg"):
         assert text in html
     assert "No visits recorded" in render_night("2026-09-29", [], "nous/a")
     index = render_index({"2026-09-28": [visit], "2026-09-29": []}, "nous/a")
@@ -32,13 +32,13 @@ def test_pages_from_sidecars():
     for item in visit["tracks"]:
         item["class"] = item.pop("class_")
     html = render_night("2026-09-28", [visit], "nous/a")
-    assert html.count("marker-end") == 2 and "a dog trotting &lt;outside&gt;" in html
+    assert "marker-end" not in html and "a dog trotting &lt;outside&gt;" in html
     assert 'id="label-dog"' in html and "dog (1)" in html and 'class="label-dog"' in html
     assert "#label-dog:not(:checked) ~ .hours .label-dog" in html
     assert "dog (80%)" in html and "person (100%)" in html and "<script>" not in html
     assert "dog (2)" in render_night("2026-09-28", [visit, visit], "nous/a")
     visit["tracks"] = []
-    assert render_night("2026-09-28", [visit], "nous/a").count("marker-end") == 1
+    assert "marker-end" not in render_night("2026-09-28", [visit], "nous/a")
     visit["clip"] = "../secret.mp4"
     with pytest.raises(ValueError):
         render_night("2026-09-28", [visit], "nous/a")
@@ -132,6 +132,8 @@ def test_daytime_respects_config_and_groups_distinct_dst_hours(monkeypatch):
 def test_all_displayed_times_are_local_and_index_lists_days(monkeypatch):
     monkeypatch.setenv("TZ", "Europe/London")
     visit = _visit(["dog", "person"], "2026-09-28T20:13:00Z")
+    for item in visit["tracks"]:
+        item["ground_track"] = [[0, -1, 2], [1, 0, 4]]
     html = render_night("2026-09-28", [visit], "nous/a")
     assert "UTC" not in html and "All days" in html and "All nights" not in html
     assert "21:13 BST" in re.search(r"<h3>(.*?)</h3>", html)[1]
@@ -140,3 +142,50 @@ def test_all_displayed_times_are_local_and_index_lists_days(monkeypatch):
     assert len(tooltips) == 2 and all("21:13 BST" in title for title in tooltips)
     index = render_index({"2026-09-28": [visit]}, "nous/a")
     assert "Fox Watch — Days" in index and "Nights" not in index
+
+
+def test_map_uses_measured_paths_and_keeps_legacy_edges_as_text():
+    visit = _visit(["fox", "bird"])
+    visit["tracks"][0]["ground_track"] = [[0, -1, 2], [1, 0, 4], [2, None, None],
+                                           [3, 1, 5], [4, 5, 6]]
+    visit["tracks"][0]["description"] = "<script>alert(1)</script>"
+    html = render_night("2026-09-28", [visit], "nous/a")
+    paths = re.findall(r'<path d="([^"]+)"[^>]*marker-end=', html)
+    assert paths == ["M -1 -2 L 0 -4 M 1 -5 L 5 -6"]
+    assert '<polygon ' in html and "clip-path" not in html
+    assert "fence / near" in html and "Camera (0, 0)" in html
+    assert '<line x1="-4" y1=".6" x2="-3" y2=".6"' in html and ">1 m</text>" in html
+    assert "approximate" in html.lower() and "4°" in html and "8.8" in html
+    assert "airborne birds" in html.lower() and "ground-plane" in html
+    assert "left → far" in html and "Ground position unavailable" in html
+    assert "<script>" not in html and "&lt;script&gt;" in html
+    assert "Unknown endpoints use the centre" not in html
+
+
+@pytest.mark.parametrize("coordinate", [float("nan"), float("inf"), "\"/><script>", True])
+def test_map_rejects_non_numeric_or_nonfinite_sidecar_ground_coordinates(coordinate):
+    visit = _visit(["fox"])
+    visit["tracks"][0]["ground_track"] = [[0, coordinate, 2], [1, 0, 4]]
+    with pytest.raises(ValueError):
+        render_night("2026-09-28", [visit], "nous/a")
+
+
+def test_map_extreme_finite_points_break_paths_and_single_points_are_visible():
+    visit = _visit(["fox"])
+    visit["tracks"][0]["ground_track"] = [[0, -1, 2], [1, 1e200, 2], [2, 1, 3]]
+    html = render_night("2026-09-28", [visit], "nous/a")
+    assert "1e+200" not in html and "marker-end" not in html
+    assert re.findall(r'<circle cx="([^"]+)" cy="([^"]+)"', html) == [("-1", "-2"), ("1", "-3")]
+
+
+def test_map_bounds_include_ground_paths_outside_approximate_patch():
+    visit = _visit(["fox"])
+    visit["tracks"][0]["ground_track"] = [[0, 5, 11], [1, 7, 3]]
+    html = render_night("2026-09-28", [visit], "nous/a")
+    x, y, width, height = map(float, re.search(r'<svg viewBox="([^"]+)"', html)[1].split())
+    assert x <= 4.5 and x + width >= 7.5
+    assert y <= -11.5 and y + height >= -.5
+    assert x <= -5 and x + width >= 6 and y + height >= 1
+    assert 'd="M 5 -11 L 7 -3"' in html
+    legacy = render_night("2026-09-28", [_visit(["fox"])], "nous/a")
+    assert '<svg viewBox="-5 -10 11 11"' in legacy

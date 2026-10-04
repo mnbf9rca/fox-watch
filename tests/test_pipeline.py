@@ -65,7 +65,8 @@ def test_finish_retracks_without_old_labels_and_labels_empty_clips(tmp_path, mon
     hosted = Mock(return_value=("dog", .9, "a moving dog"))
     monkeypatch.setattr(pipeline, "classify", hosted)
     monkeypatch.setattr(pipeline, "annotate", lambda clip, target, *args: target.write_bytes(b"video"))
-    config = dict(PRIMARY_MODEL="nous/a", MODELS=["nous/a"], MIN_BLOB_AREA=100, EDGE_MARGIN=80, MIN_TRACK_MOVE_RATIO=1.2)
+    config = dict(PRIMARY_MODEL="nous/a", MODELS=["nous/a"], MIN_BLOB_AREA=100, EDGE_MARGIN=80, MIN_TRACK_MOVE_RATIO=1.2,
+                  GROUND_CALIBRATION={"image_size": [1920, 1080], "homography": [[.001, 0, 0], [0, .001, 0], [0, 0, 1]]})
     pipeline._finish(sidecar, config, date(2026, 1, 1))
     saved = json.loads(sidecar.read_text())
     assert saved["labels"]["nous/a"]["label"] == (name or "none")
@@ -76,4 +77,5 @@ def test_finish_retracks_without_old_labels_and_labels_empty_clips(tmp_path, mon
     else:
         hosted.assert_not_called()
     if legacy:
-        retrack.assert_called_once_with(directory / row["clip"], 100, 80, 1.2)
+        retrack.assert_called_once_with(directory / row["clip"], 100, 80, 1.2,
+                                        ground_calibration=config["GROUND_CALIBRATION"])

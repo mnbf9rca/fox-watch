@@ -10,13 +10,14 @@ from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 from foxcam.classify import parse_answer
+from foxcam.ground import PATCH_OUTLINE_M
 
 
 PALETTE = dict(fox="#a84300", hedgehog="#626400", cat="#7051a1", badger="#333333",
                rat="#755139", mouse="#846451", bird="#176b9b", deer="#856000",
                dog="#9b5100", person="#126451", vehicle="#2549a0",
                other="#006c67", none="#546e7a", unclassified="#777777")
-EDGES = dict(far=(50, 0), fence=(50, 100), left=(0, 50), right=(100, 50), unknown=(50, 50))
+EDGES = {"far", "fence", "left", "right", "unknown"}
 
 
 def _page(title, body, css=""):
@@ -37,10 +38,36 @@ def _primary(visit, model):
     return _answer(visit["labels"].get(model, {"label": "unclassified", "confidence": 0}))
 
 
+def _ground_segments(rows):
+    if not isinstance(rows, list):
+        raise ValueError("invalid ground track")
+    segments, current = [], []
+    for row in rows:
+        if (not isinstance(row, list) or len(row) != 3 or type(row[0]) is not int
+                or row[0] < 0):
+            raise ValueError("invalid ground point")
+        _, across, forward = row
+        if across is None and forward is None:
+            valid = False
+        else:
+            if any(type(value) not in (int, float) or not math.isfinite(value)
+                   for value in (across, forward)):
+                raise ValueError("invalid ground coordinate")
+            valid = forward >= 0 and math.hypot(across, forward) <= 100
+        if valid:
+            current.append((across, -forward))
+        elif current:
+            segments.append(current)
+            current = []
+    if current:
+        segments.append(current)
+    return segments
+
+
 def render_night(night: str, visits: list[dict], primary_model: str) -> str:
     if date.fromisoformat(night).isoformat() != night:
         raise ValueError("invalid night")
-    cards, arrows, legend = {}, [], []
+    cards, arrows, legend, map_points = {}, [], [], []
     counts = Counter()
     zone = ZoneInfo(os.environ.get("TZ", "Europe/London"))
     stop_time = time.fromisoformat(os.environ.get("STOP_TIME", "07:00"))
@@ -88,16 +115,23 @@ def render_night(night: str, visits: list[dict], primary_model: str) -> str:
                 raise ValueError("invalid track edge")
             detail = (f"Visit {number}, {when}, track {index + 1}: {item.get('class', 'unknown')} — "
                       f"{species} ({score:.0%}), {start} → {end}. {item.get('description', '')}")
+            segments = _ground_segments(item.get("ground_track", []))
+            map_points.extend(point for segment in segments for point in segment)
+            if not segments:
+                detail += " Ground position unavailable."
             track_details.append(f"<li>{escape(detail)}</li>")
-            x1, y1 = EDGES[start]
-            x2, y2 = EDGES[end]
-            path = f"M {x1} {y1} L {x2} {y2}"
-            if (x1, y1) == (x2, y2):
-                path = f"M {x1} {y1} c -15,-15 15,-15 0,0"
             color = PALETTE[species]
             marker = f"arrow-{number}-{index}"
-            arrows.append(f'''<defs><marker id="{marker}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="{color}"/></marker></defs>
-<path d="{path}" fill="none" stroke="{color}" stroke-width="1.5" marker-end="url(#{marker})"><title>{escape(detail)}</title></path>''')
+            path = " ".join(" ".join(f"{'M' if i == 0 else 'L'} {x:g} {y:g}"
+                                     for i, (x, y) in enumerate(segment))
+                            for segment in segments if len(segment) > 1)
+            if path:
+                arrows.append(f'''<defs><marker id="{marker}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="{color}"/></marker></defs>
+<path d="{path}" fill="none" stroke="{color}" stroke-width=".06" marker-end="url(#{marker})"><title>{escape(detail)}</title></path>''')
+            for segment in segments:
+                if len(segment) == 1:
+                    x, y = segment[0]
+                    arrows.append(f'<circle cx="{x:g}" cy="{y:g}" r=".08" fill="{color}"><title>{escape(detail)}</title></circle>')
             legend.append(f'<li><span style="color:{color}" aria-hidden="true">●</span> {escape(detail)}</li>')
         heading = ', '.join(f'{species} ({score:.0%})' for species, score in track_answers)
         cards.setdefault(hour, []).append(f'''<article class="label-{label}{' daytime' if daytime else ''}" title="{escape(description)}"><h3>Visit {number}, {when}: {heading}</h3>
@@ -111,14 +145,26 @@ def render_night(night: str, visits: list[dict], primary_model: str) -> str:
     css += '#label-daytime:not(:checked) ~ .hours .daytime { display: none }details { margin: 1rem 0 }summary { cursor: pointer; font-weight: bold; margin: .5rem 0 }'
     groups = ''.join(f'<details open><summary>{hour.astimezone(zone):%Y-%m-%d %H:00 %Z} ({len(group)})</summary>'
                      f'<div class="visits">{"".join(group)}</div></details>' for hour, group in sorted(cards.items()))
+    outline = " ".join(f"{across:g},{-forward:g}" for across, forward in PATCH_OUTLINE_M)
+    viewbox = "-5 -10 11 11"
+    if map_points:
+        xs, ys = zip(*map_points)
+        # Keep the outline, edge labels and scale bar in view, then include
+        # every accepted path point with a half-metre margin.
+        left, top = min(-5, min(xs)) - .5, min(-10, min(ys)) - .5
+        right, bottom = max(6, max(xs)) + .5, max(1, max(ys)) + .5
+        viewbox = f"{left:g} {top:g} {right - left:g} {bottom - top:g}"
     content = f'''<p><a href="index.html">All days</a> · Primary model: {escape(primary_model)}</p>
 <p>Show visits by most interesting label:</p>{filters}
 <input type="checkbox" id="label-daytime" checked><label for="label-daytime">Daytime</label>
-<svg viewBox="-20 -20 140 140" role="img" aria-labelledby="map-title map-description">
-<title id="map-title">8 × 8 metre garden patch</title><desc id="map-description">Entry-to-exit arrows; visit details in the legend below. Unknown endpoints are drawn at the centre. These are schematic edges, not calibrated positions.</desc>
-<rect x="0" y="0" width="100" height="100" fill="#f6f7f3" stroke="#333"/>
-<g font-size="5" text-anchor="middle"><text x="50" y="-5">far</text><text x="50" y="110">fence</text><text x="-10" y="50">left</text><text x="110" y="50">right</text></g>{''.join(arrows)}</svg>
-<p>Unknown endpoints use the centre; arrows show schematic edges, not calibrated positions.</p>
+<svg viewBox="{viewbox}" role="img" aria-labelledby="map-title map-description">
+<title id="map-title">Ground paths on an approximate 8 × 8 metre garden patch</title>
+<desc id="map-description">Calibrated bottom-centre ground-plane estimates in metres, across positive right and forward away from the camera. Paths break at unavailable positions. The outline is approximate and ground-plane estimates are invalid for airborne birds.</desc>
+<polygon points="{outline}" fill="#f6f7f3" stroke="#333" stroke-width=".04"/>
+<g font-size=".3" text-anchor="middle"><text x=".6" y="-9.6">far</text><text x="0" y="-.5">fence / near (approx.)</text><text x="0" y="-.15">Camera (0, 0)</text><text x="-4.5" y="-4.8">left</text><text x="5.4" y="-4.8">right</text></g>
+<g stroke="#333" stroke-width=".04"><line x1="-4" y1=".6" x2="-3" y2=".6"/><line x1="-4" y1=".5" x2="-4" y2=".7"/><line x1="-3" y1=".5" x2="-3" y2=".7"/></g><text x="-3.5" y=".95" font-size=".3" text-anchor="middle">1 m</text>
+{''.join(arrows)}</svg>
+<p>Ground-plane estimates in metres, invalid for airborne birds. Approximate 8 × 8 m outline: centre line 4° right of the camera axis, far edge 8.8 m away; exact corners have not been surveyed. Edge names remain text descriptions. Legacy visits without ground data have no mapped path.</p>
 <ul aria-label="Visit map legend">{''.join(legend)}</ul>
 <div class="hours">{groups or '<p>No visits recorded</p>'}</div>'''
     return _page(night, content, css)

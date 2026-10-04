@@ -15,6 +15,7 @@ import cv2
 from foxcam.classify import classify
 from foxcam.detect import VEHICLES
 from foxcam.events import clip_name, night_for
+from foxcam.ground import load_calibration
 from foxcam.media import annotate, cut, duration, scan, track
 from foxcam.site import build_site, render_night
 
@@ -27,7 +28,8 @@ def load_config() -> dict:
     config = {"DATA_DIR": Path(os.environ.get("DATA_DIR", "/data/foxcam")),
               "MODELS": os.environ.get("MODELS", "").split(","),
               "PRIMARY_MODEL": os.environ.get("PRIMARY_MODEL", ""),
-              "TZ": ZoneInfo(os.environ.get("TZ", "Europe/London"))}
+              "TZ": ZoneInfo(os.environ.get("TZ", "Europe/London")),
+              "GROUND_CALIBRATION": load_calibration(os.environ.get("GROUND_CALIBRATION"))}
     for name, default in dict(GAP_SECONDS=3, PAD_SECONDS=2, MIN_BLOB_AREA=25,
                               EDGE_MARGIN=80, MIN_TRACK_MOVE_RATIO=0.75, MIN_FREE_GB=10).items():
         config[name] = float(os.environ.get(name, default))
@@ -132,7 +134,8 @@ def _ingest(source: Path, captured: datetime, start: float, end: float, director
     padded = captured + timedelta(seconds=max(0, start - config["PAD_SECONDS"]))
     row = dict(clip=clip.name, night=directory.name, start_utc=padded.isoformat().replace("+00:00", "Z"),
                duration_s=length, labels={}, annotation_label=None,
-               **track(clip, config["MIN_BLOB_AREA"], config["EDGE_MARGIN"], config["MIN_TRACK_MOVE_RATIO"]))
+               **track(clip, config["MIN_BLOB_AREA"], config["EDGE_MARGIN"], config["MIN_TRACK_MOVE_RATIO"],
+                       ground_calibration=config.get("GROUND_CALIBRATION")))
     _save(sidecar, row)
 
 
@@ -145,13 +148,15 @@ def _finish(sidecar: Path, config: dict, cutoff: date) -> None:
     if "tracks" not in row:
         row["tracks"] = []
         if clip.exists():
-            row.update(track(clip, config["MIN_BLOB_AREA"], config["EDGE_MARGIN"], config["MIN_TRACK_MOVE_RATIO"]))
+            row.update(track(clip, config["MIN_BLOB_AREA"], config["EDGE_MARGIN"], config["MIN_TRACK_MOVE_RATIO"],
+                             ground_calibration=config.get("GROUND_CALIBRATION")))
             row["labels"] = {}  # Clip-level answers do not describe the newly detected primary track.
     images = {item["id"]: [sidecar.with_name(f"{sidecar.stem}.t{item['id']}{suffix}.jpg") for suffix in ("", ".crop")]
               for item in row["tracks"]}
     frames = [sidecar.parent / name for name in row["frames"]] + [path for pair in images.values() for path in pair]
     if not all(path.is_file() for path in frames):
-        track(clip, config["MIN_BLOB_AREA"], config["EDGE_MARGIN"], config["MIN_TRACK_MOVE_RATIO"])
+        track(clip, config["MIN_BLOB_AREA"], config["EDGE_MARGIN"], config["MIN_TRACK_MOVE_RATIO"],
+              ground_calibration=config.get("GROUND_CALIBRATION"))
     primary = max(row["tracks"], key=lambda item: len(item["boxes"]), default=None)
     if primary:
         primary["labels"] = row["labels"]  # the top-level labels are the primary track's; edits there win

@@ -9,6 +9,7 @@ import numpy as np
 from foxcam.detect import detect, iou, link
 from foxcam.edges import nearest_edge
 from foxcam.events import merge_events
+from foxcam.ground import ground_track
 
 
 SCAN_WIDTH = 640
@@ -129,7 +130,8 @@ def _moved(boxes: list[list[int]], ratio: float) -> bool:
     return math.hypot(max(xs) - min(xs), max(ys) - min(ys)) >= max(20, ratio * mean_size)
 
 
-def track(clip: Path, min_blob_area: float, edge_margin: float, min_track_move_ratio: float = 0.75) -> dict:
+def track(clip: Path, min_blob_area: float, edge_margin: float, min_track_move_ratio: float = 0.75,
+          ground_calibration: dict | None = None) -> dict:
     video = cv2.VideoCapture(str(clip))
     try:
         ok, image = video.read()
@@ -153,6 +155,7 @@ def track(clip: Path, min_blob_area: float, edge_margin: float, min_track_move_r
         tracks.extend(unknown)
         tracks = [item for item in tracks if _moved(item["boxes"], min_track_move_ratio)]
         for item in tracks:
+            item["ground_track"] = ground_track(item["boxes"], width, height, ground_calibration)
             item["labels"], item["description"] = {}, ""
             item["entry_edge"], item["exit_edge"] = [
                 nearest_edge(x + w / 2, y + h / 2, width, height, edge_margin)
