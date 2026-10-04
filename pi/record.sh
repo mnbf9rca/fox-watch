@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${START_TIME:?}" "${STOP_TIME:?}" "${TZ:?}" "${SHUTTER_US:?}" "${GAIN:?}" "${AWB_GAINS:?}" "${RECORDINGS_DIR:?}"
+: "${START_TIME:?}" "${STOP_TIME:?}" "${TZ:?}" "${SHUTTER_US:?}" "${GAIN:?}" "${RECORDINGS_DIR:?}"
 export TZ
 once=0
 if [[ ${1:-} == --once && $# == 1 ]]; then once=1
@@ -51,7 +51,7 @@ while :; do
     # shellcheck disable=SC2086  # CAMERA_ARGS is a deliberate word-split list of extra rpicam-vid flags
     rpicam-vid --nopreview --width "${WIDTH:-1280}" --height "${HEIGHT:-720}" --framerate 10 --codec h264 \
         --inline --intra 10 --bitrate "${BITRATE:-3000000}" --timeout "$((seconds * 1000))" --shutter "$SHUTTER_US" --gain "$GAIN" \
-        --awbgains "$AWB_GAINS" ${CAMERA_ARGS:-} --output "$raw" &
+        ${AWB_GAINS:+--awbgains "$AWB_GAINS"} ${CAMERA_ARGS:-} --output "$raw" &
     child=$!
     wait "$child"
     child=''
