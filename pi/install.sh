@@ -31,5 +31,6 @@ sudo -n install -d -o rob -g rob -m 755 "$RECORDINGS_DIR"
 sudo -n systemctl daemon-reload
 sudo -n systemctl enable --now systemd-time-wait-sync.service
 sudo -n systemctl enable --now foxcam-record.timer foxcam-sync.timer
+sudo -n systemctl enable foxcam-record.service
 echo 'Installed Pi scripts/config and enabled both timers'
 REMOTE
