@@ -18,6 +18,7 @@ from foxcam.events import night_for
 
 MODEL = "deepinfra/__foxcam_nonexistent_model__"
 SECONDARY = "deepinfra/saved-secondary"
+SKIPPED = ["deepinfra/skipped-secondary", "deepinfra/skipped-third"]
 
 
 def cli(data, env, *arguments, **overrides):
@@ -166,11 +167,10 @@ def check(data, live=False, benchmark=False):
     if not live:
         for key in ("NOUS_API_KEY", "DEEPINFRA_API_KEY", "TOGETHER_API_KEY"):
             env.pop(key, None)
-        env.update(MODELS=MODEL, PRIMARY_MODEL=MODEL, DEEPINFRA_BASE_URL="https://127.0.0.1:1",
+        env.update(MODELS=",".join([MODEL, *SKIPPED]), PRIMARY_MODEL=MODEL, DEEPINFRA_BASE_URL="https://127.0.0.1:1",
                    DEEPINFRA_API_KEY="local-check-no-secret")
     if not live and not benchmark:
         check_refile(data / "refile-check", env)
-    models = env["MODELS"].split(",")
     primary = env["PRIMARY_MODEL"]
     missing = data / "missing-data"
     assert cli(missing, env, "run").returncode != 0
@@ -203,6 +203,9 @@ def check(data, live=False, benchmark=False):
     assert annotated.exists() and all(frame.exists() for frame in frames)
     playable(annotated)
     assert row["tracks"][0]["class"] == "unknown" and row["tracks"][0]["labels"] == row["labels"], row["tracks"]
+    assert set(row["labels"]) == {primary}, row["labels"]
+    if not live:
+        assert all(model not in completed_run.stderr for model in SKIPPED), completed_run.stderr
     throughput = [line for line in completed_run.stderr.splitlines() if "per clip minute" in line]
     for item in row["tracks"]:
         assert len(item["ground_track"]) == len(item["boxes"])
@@ -217,13 +220,12 @@ def check(data, live=False, benchmark=False):
         print("PASS: 1920x1080 offline pipeline benchmark (20 s input, moving target, playable annotation)")
         return
     if live:
-        for model in models:
-            answer = row["labels"][model]
-            assert answer["label"] != "unclassified", model
-            print(f"{model}: {answer['label']}, confidence={answer['confidence']}")
+        answer = row["labels"][primary]
+        assert answer["label"] != "unclassified", primary
+        print(f"{primary}: {answer['label']}, confidence={answer['confidence']}")
         print(f"description: {row['tracks'][0]['description']!r}")
         assert row["annotation_label"] == [[row["labels"][primary]["label"], row["labels"][primary]["confidence"]]]
-        print("PASS: live provider answers and playable primary H.264 annotation")
+        print("PASS: live primary-only unknown-track answer and playable H.264 annotation")
         return
     assert row["labels"][MODEL] == {"label": "unclassified", "confidence": 0.0}
     comparison = cli(data, env, "compare", DEEPINFRA_API_KEY="")
@@ -354,7 +356,7 @@ def check(data, live=False, benchmark=False):
     assert f"{SECONDARY}: 0/2 (0.0%)" in result.stdout
     assert cli(data, env, "run").returncode != 0
     print("PASS: offline pipeline, retries, partial outputs, annotation refresh, input isolation, "
-          "empty nights, config/space guards, retention, and secret-free comparison")
+          "empty nights, config/space guards, primary-only unknowns, retention, and secret-free comparison")
 
 
 if __name__ == "__main__":

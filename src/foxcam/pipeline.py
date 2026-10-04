@@ -164,7 +164,7 @@ def _finish(sidecar: Path, config: dict, cutoff: date) -> None:
         row["labels"] = {model: {"label": "none", "confidence": 1.0} for model in config["MODELS"]}
         _save(sidecar, row)
     for item in row["tracks"]:
-        for model in config["MODELS"]:
+        for model in ([primary_model] if item["class"] == "unknown" else config["MODELS"]):
             if item["labels"].get(model, UNCLASSIFIED)["label"] != "unclassified":
                 continue
             if item["class"] in {"person", "vehicle"} or item["class"] in VEHICLES:
@@ -192,7 +192,8 @@ def _finish(sidecar: Path, config: dict, cutoff: date) -> None:
         _save(sidecar, row)
     if (date.fromisoformat(row["night"]) < cutoff
             and all(item["labels"].get(model, UNCLASSIFIED)["label"] != "unclassified"
-                    for item in row["tracks"] for model in config["MODELS"])):
+                    for item in row["tracks"]
+                    for model in ([primary_model] if item["class"] == "unknown" else config["MODELS"]))):
         clip.unlink(missing_ok=True)
 
 
