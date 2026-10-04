@@ -1,5 +1,6 @@
 """COCO object detection with YOLOX-S from the OpenCV model zoo, run through cv2.dnn."""
 from hashlib import sha256
+from math import hypot
 import os
 from pathlib import Path
 import sys
@@ -83,27 +84,53 @@ def iou(a, b) -> float:
 
 
 def link(detections: list[tuple[int, list]], max_misses: int = 10) -> list[dict]:
-    """Greedy same-class IoU linking; a track ends after max_misses consecutive processed frames."""
-    # ponytail: IoU only; use centroid distance or Kalman if fast movers still split.
+    """Link by same-class IoU, then distance; expire after max_misses processed frames."""
     tracks, live = [], []
     for frame, found in detections:
-        matched = set()
-        for name, _, *box in sorted(found, key=lambda d: -d[1]):
+        found = sorted(found, key=lambda d: -d[1])
+        matched, assignments = set(), {}
+        # Finish every IoU match before distance can consume a track.
+        for index, (name, _, *box) in enumerate(found):
             best, best_iou = None, 0.0
             for track in live:
-                if track["class"] == name and id(track) not in matched:
+                if track["class"] == name and track["id"] not in matched:
                     score = iou(track["boxes"][-1][1:], box)
                     if score >= 0.05 and score > best_iou:
                         best, best_iou = track, score
+            if best is not None:
+                assignments[index] = best
+                matched.add(best["id"])
+        # Calibration: a 12 cm bird at 5 m is ~35 px; 1 m travel is ~296 px.
+        # 9 box lengths admits that jump (8.33 lengths), with rounding margin.
+        # ponytail: nearest centroid can swap nearby same-class movers; add
+        # velocity prediction only if field footage demonstrates that ambiguity.
+        for index, (name, _, x, y, w, h) in enumerate(found):
+            if index in assignments:
+                continue
+            best, best_distance = None, float("inf")
+            for track in live:
+                if track["class"] != name or track["id"] in matched:
+                    continue
+                px, py, pw, ph = track["boxes"][-1][1:]
+                size = min(max(w, h), max(pw, ph))
+                distance = hypot(x + w / 2 - px - pw / 2, y + h / 2 - py - ph / 2)
+                if size > 0 and distance <= 9 * size and distance < best_distance:
+                    best, best_distance = track, distance
+            if best is not None:
+                assignments[index] = best
+                matched.add(best["id"])
+        # Add newborns only after both passes, so this frame cannot rematch them.
+        for index, (_, _, *box) in enumerate(found):
+            best = assignments.get(index)
             if best is None:
-                best = {"id": len(tracks), "class": name, "boxes": [], "misses": 0}
+                best = {"id": len(tracks), "class": found[index][0], "boxes": [], "misses": 0}
                 tracks.append(best)
                 live.append(best)
-            matched.add(id(best))
+                matched.add(best["id"])
             best["boxes"].append([frame, *box])
             best["misses"] = 0
         for track in live:
-            if id(track) not in matched:
+            if track["id"] not in matched:
                 track["misses"] += 1
         live = [track for track in live if track["misses"] < max_misses]
     for track in tracks:
