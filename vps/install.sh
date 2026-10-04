@@ -3,7 +3,7 @@ set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 host=${VPS_HOST:-root@62.238.55.235}
-pi=${PI_HOST:-rob@192.168.17.145}
+pi=${PI_HOST:-rob@10.0.2.138}
 ssh_options=(-o BatchMode=yes -o ConnectTimeout=10)
 mode=${1:---provision}
 

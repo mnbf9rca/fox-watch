@@ -2,7 +2,7 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")" && pwd)
-host=${PI_HOST:-rob@192.168.17.145}
+host=${PI_HOST:-rob@10.0.2.138}
 ssh_options=(-o BatchMode=yes -o ConnectTimeout=10)
 stage=$(ssh "${ssh_options[@]}" "$host" 'sudo -n true && mktemp -d')
 trap 'ssh "${ssh_options[@]}" "$host" "rm -rf -- $stage"' EXIT
