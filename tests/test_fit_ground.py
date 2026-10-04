@@ -39,3 +39,38 @@ def test_confirmed_farther_slab_is_in_fit_but_unlocated_nearer_slab_is_not():
     assert len(SURVEY) == 9
     assert ("Laser 5", 863, 518, -1.08, 6.66, -.195) in SURVEY
     assert not any(row[0] == "Laser 5a" for row in SURVEY)
+
+
+@pytest.mark.parametrize('held', [0, 8])
+def test_cross_validation_excludes_held_ground_and_elevation(held):
+    from fit_ground import BOTTLES, SURVEY, leave_one_out
+
+    rows = BOTTLES + SURVEY
+    predictions = leave_one_out(rows)
+    changed = list(rows)
+    row = list(changed[held])
+    row[3] += .25
+    row[4] += .4
+    if len(row) == 6:
+        row[5] += .05
+    changed[held] = tuple(row)
+    changed_predictions = leave_one_out(changed)
+    for model, points in predictions.items():
+        assert np.asarray(points).shape == (17, 2)
+        assert np.isfinite(points).all()
+        assert points[held] == pytest.approx(changed_predictions[model][held])
+
+
+def test_old_model_cross_validation_uses_only_remaining_bottles():
+    import cv2
+    from fit_ground import BOTTLES, SURVEY, leave_one_out
+
+    rows = BOTTLES + SURVEY
+    pixels = np.array([r[1:3] for r in rows], dtype=float) * 5 / 6
+    ground = np.array([r[3:5] for r in rows], dtype=float)
+    predictions = leave_one_out(rows)['old_8_bottle_homography']
+    for held in (0, 8):
+        train = [i for i in range(8) if i != held]
+        matrix, _ = cv2.findHomography(pixels[train], ground[train], method=0)
+        expected = cv2.perspectiveTransform(pixels[held:held+1, None], matrix)[0, 0]
+        assert predictions[held] == pytest.approx(expected)

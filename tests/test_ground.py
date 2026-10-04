@@ -44,14 +44,16 @@ def test_calibration_loader_is_optional_and_rejects_invalid_matrices(tmp_path):
         load_calibration(target)
 
 
-def test_physical_survey_fit_and_runtime_residuals():
+def test_selected_survey_fit_and_runtime_residuals():
     from foxcam.ground import ground_track, load_calibration
 
     calibration = load_calibration(Path(__file__).parents[1] / "vps/ground-calibration.json")
-    assert "homography" not in calibration
+    assert "camera" not in calibration
+    assert "homography" in calibration
     assert len(calibration["points"]) == 17
-    assert calibration["camera"]["focal_length_px"] == pytest.approx(1774 * 5 / 6)
-    assert calibration["camera"]["height_m"] == .327
+    scores = calibration["cross_validation"]["models"]
+    assert calibration["model"] == min(scores, key=lambda name: scores[name]["rms_radial_m"])
+    assert calibration["model"] == "old_8_bottle_homography"
     errors = []
     for i, point in enumerate(calibration["points"]):
         x, y = point["image_measurement_px"]
@@ -60,10 +62,13 @@ def test_physical_survey_fit_and_runtime_residuals():
         error = math.dist(mapped, point["measured_ground_m"])
         assert error == pytest.approx(point["radial_error_m"])
         errors.append(error)
-    assert math.sqrt(sum(error ** 2 for error in errors) / 17) == pytest.approx(.6108952146)
-    assert max(errors) == pytest.approx(1.4335569602)
-    assert calibration["fit"]["plane_rms_vertical_m"] == pytest.approx(.02688391809)
-    assert calibration["fit"]["old_homography_rms_radial_m"] == pytest.approx(.5849001826)
+    assert math.sqrt(sum(error ** 2 for error in errors) / 17) == pytest.approx(.5849001826)
+    assert max(errors) == pytest.approx(1.9673165383)
+    assert calibration["fit"]["rms_radial_m"] == pytest.approx(.5849001826)
+    for score in scores.values():
+        assert len(score["radial_errors_m"]) == 17
+        assert score["rms_radial_m"] == pytest.approx(
+            math.sqrt(sum(e**2 for e in score["radial_errors_m"]) / 17))
 
 
 def test_garden_mapping_rejects_shrub_top_horizon_artifacts():

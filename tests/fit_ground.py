@@ -1,4 +1,4 @@
-"""Refit the physical lawn model from docs/calibration.md; no new dependencies."""
+"""Cross-validate and refit the ground model from docs/calibration.md; no new dependencies."""
 import json
 from pathlib import Path
 
@@ -79,54 +79,88 @@ def fit_rotation(pixels, ground, plane, camera, image_size):
     return angles
 
 
-def main():
-    target = Path(__file__).parents[1] / "vps/ground-calibration.json"
-    calibration = json.loads(target.read_text())
-    rows = BOTTLES + SURVEY
+def fit_models(rows, held=None):
+    """Refit each candidate, excluding held XY and elevation from all fits."""
     pixels = np.array([row[1:3] for row in rows], dtype=float) * (5 / 6)
     ground = np.array([row[3:5] for row in rows], dtype=float)
-    heights = np.array([row[3:] for row in SURVEY], dtype=float)
+    train = np.arange(len(rows)) != held
+    models = {}
+    for name, subset in (("old_8_bottle_homography", train & (np.arange(len(rows)) < 8)),
+                         ("homography_17_point", train)):
+        matrix, _ = cv2.findHomography(pixels[subset], ground[subset], method=0)
+        models[name] = {"homography": matrix.tolist()}
+    heights = np.array([row[3:] for i, row in enumerate(rows) if len(row) == 6 and i != held])
     camera = dict(focal_length_px=1774 * 5 / 6, height_m=.327)
     plane = fit_plane(heights, camera["height_m"])
-    angles = fit_rotation(pixels, ground, plane, camera, [1920, 1080])
+    angles = fit_rotation(pixels[train], ground[train], plane, camera, [1920, 1080])
     camera.update(zip(("pitch_deg", "roll_deg", "yaw_deg"), angles.tolist()))
-    predicted = intersections(pixels, plane, camera, [1920, 1080])
-    # Compare against the original eight-bottle homography, not a refitted baseline.
-    old_matrix, _ = cv2.findHomography(pixels[:8], ground[:8], method=0)
-    old = cv2.perspectiveTransform(pixels.reshape(-1, 1, 2), old_matrix).reshape(-1, 2)
-    errors, old_errors = predicted - ground, old - ground
-    radial, old_radial = np.linalg.norm(errors, axis=1), np.linalg.norm(old_errors, axis=1)
-    plane_errors = plane[0] + heights[:, :2] @ plane[1:] - (heights[:, 2] + camera["height_m"])
-    calibration.pop("homography", None)
+    models["pinhole_plane"] = dict(camera=camera, ground_plane=plane.tolist())
+    return models
+
+
+def project_model(pixels, model):
+    if "homography" in model:
+        return cv2.perspectiveTransform(pixels[:, None], np.asarray(model["homography"]))[:, 0]
+    return intersections(pixels, np.asarray(model["ground_plane"]), model["camera"], [1920, 1080])
+
+
+def leave_one_out(rows):
+    """Return held-out predictions without the runtime cap or discarded errors."""
+    predictions = {}
+    for held, row in enumerate(rows):
+        pixel = np.asarray([row[1:3]], dtype=float) * (5 / 6)
+        for name, model in fit_models(rows, held).items():
+            predictions.setdefault(name, []).append(project_model(pixel, model)[0])
+    return {name: np.asarray(points) for name, points in predictions.items()}
+
+
+def main():
+    target = Path(__file__).parents[1] / "vps/ground-calibration.json"
+    previous = json.loads(target.read_text())
+    rows = BOTTLES + SURVEY
+    pixels = np.asarray([row[1:3] for row in rows], dtype=float) * (5 / 6)
+    ground = np.asarray([row[3:5] for row in rows], dtype=float)
+    models, held_predictions = fit_models(rows), leave_one_out(rows)
+    scores = {}
+    for name, predictions in held_predictions.items():
+        errors = np.linalg.norm(predictions - ground, axis=1)
+        scores[name] = dict(rms_radial_m=float(np.sqrt(np.mean(errors ** 2))),
+                           max_radial_m=float(errors.max()), radial_errors_m=errors.tolist(),
+                           predictions_m=predictions.tolist())
+    chosen = min(scores, key=lambda name: scores[name]["rms_radial_m"])
+    predicted = project_model(pixels, models[chosen])
+    errors = predicted - ground
+    radial = np.linalg.norm(errors, axis=1)
+    # Keep only the winning model's runtime parameters: camera would override H.
+    calibration = {key: value for key, value in previous.items()
+                   if key in ("image_size", "measurement_image_size", "measurement_to_recording_scale",
+                              "limitations", "patch_outline_m", "patch_outline_note",
+                              "motion_polygon", "motion_polygon_note")}
     calibration.update(
-        source="docs/calibration.md: eight bottle positions and nine confirmed laser points, 2026-10-04",
-        model="pinhole_plane", camera=camera, ground_plane=plane.tolist(),
-        axes="World (across, forward, up), metres; z=0 is ground directly below lens at (0,0,0.327)",
-        rotation_convention="Positive pitch down, yaw right, roll right-axis down; principal point at image centre",
-        fit=dict(method="OLS plane on nine laser elevations; fixed-intrinsics rotation minimizes summed XY ray-plane intersection errors for all 17 confirmed positions",
+        source="docs/calibration.md: eight bottles and nine confirmed laser points, 2026-10-04",
+        model=chosen, **models[chosen],
+        axes="Across right, forward from lens; metres. Lawn-ground estimates; patio approximate.",
+        fit=dict(method="Lowest leave-one-out radial RMS across all 17 positions; winner refitted on its complete training set",
                  excluded_points=["Laser 5a: no marked pixel or bearing"],
-                 plane_rms_vertical_m=float(np.sqrt(np.mean(plane_errors ** 2))),
-                 rms_radial_m=float(np.sqrt(np.mean(radial ** 2))), max_radial_m=float(radial.max()),
-                 old_homography_rms_radial_m=float(np.sqrt(np.mean(old_radial ** 2))),
-                 old_homography_max_radial_m=float(old_radial.max())),
+                 rms_radial_m=float(np.sqrt(np.mean(radial ** 2))), max_radial_m=float(radial.max())),
+        cross_validation=dict(
+            method="17 held-out predictions; old homography uses only remaining bottles; other models exclude held XY; physical plane also excludes held survey elevation; no 12 m clipping during scoring",
+            models=scores),
         points=[dict(name=row[0], image_measurement_px=list(row[1:3]), image_recording_px=pixel.tolist(),
                      measured_ground_m=measured.tolist(), fitted_ground_m=fitted.tolist(),
-                     residual_m=error.tolist(), radial_error_m=float(distance),
-                     old_homography_residual_m=old_error.tolist(), old_homography_radial_error_m=float(old_distance))
-                for row, pixel, measured, fitted, error, distance, old_error, old_distance
-                in zip(rows, pixels, ground, predicted, errors, radial, old_errors, old_radial)],
-        survey_elevations=[dict(name=row[0], measured_relative_lens_m=row[5], residual_m=float(error))
-                           for row, error in zip(SURVEY, plane_errors)],
+                     residual_m=error.tolist(), radial_error_m=float(distance))
+                for row, pixel, measured, fitted, error, distance
+                in zip(rows, pixels, ground, predicted, errors, radial)],
     )
     target.write_text(json.dumps(calibration, indent=2, allow_nan=False) + "\n")
-    print("Camera:", camera)
-    print("Plane z = a + b*across + c*forward (world metres):", plane.tolist())
-    print("| Point | Physical radial m | Old homography radial m |")
-    print("|---|---:|---:|")
-    for row in calibration["points"]:
-        print(f"| {row['name']} | {row['radial_error_m']:.4f} | {row['old_homography_radial_error_m']:.4f} |")
-    print("Fit:", calibration["fit"])
-    print("Survey elevation residuals m:", plane_errors.tolist())
+    print("| Held-out point | Old 8-bottle H | 17-point H | Physical |")
+    print("|---|---:|---:|---:|")
+    for i, row in enumerate(rows):
+        print("| " + row[0] + " | " + " | ".join(f"{score['radial_errors_m'][i]:.4f}" for score in scores.values()) + " |")
+    for label, key in (("RMS", "rms_radial_m"), ("Maximum", "max_radial_m")):
+        print("| " + label + " | " + " | ".join(f"{score[key]:.4f}" for score in scores.values()) + " |")
+    print("Chosen:", chosen)
+    print("All-point refit:", calibration["fit"])
 
 
 if __name__ == "__main__":

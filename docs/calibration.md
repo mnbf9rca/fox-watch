@@ -141,7 +141,8 @@ The lawn rises about 28 cm from the near stepping stones to the far corners, rou
 
 ## Physical ground refit, 2026-10-04
 
-The calibration now uses a pinhole camera and one lawn plane. All **17
+This earlier calibration used a pinhole camera and one lawn plane. It is
+superseded by the cross-validation selection below. All **17
 confirmed positions** (eight bottles and nine laser points, including the
 newly confirmed farther slab 5) are used. Point 5a is skipped: without its
 bearing or pixel, its elevation cannot be placed on the plane. Focal length
@@ -166,8 +167,8 @@ surfaces into runtime mapping. Pitch is 6.771199° down, roll 1.431916°
 (camera-right axis down), and yaw −0.095472° (right positive). The JSON
 records these conventions and all residual vectors. Rays parallel to the
 plane, intersecting behind the lens, or landing beyond 12 m forward remain
-null. Older calibration files can still use a homography; the production
-JSON contains only the physical model.
+null. Older calibration files can still use a homography; that revision’s production
+JSON contained only the physical model.
 
 Ground residuals below are radial distances in metres. The baseline is the
 original eight-bottle homography evaluated on all 17 positions. The physical
@@ -214,3 +215,58 @@ Reproduce both fits and residual sets with `.venv/bin/python tests/fit_ground.py
 
 The subsequent lawn/patio mask revision is documented above. Overlays 08/09
 retain the original lawn-only mask; 11/12 show the current polygon.
+
+## Ground model selection by leave-one-out validation
+
+The **old eight-bottle homography** is selected and stored as the active
+mapping in `vps/ground-calibration.json`: it has the lowest held-out radial
+RMS across all 17 confirmed positions. No physical camera parameters remain
+at the top level to override it. The preceding physical-fit section records
+the earlier experiment, not the current production selection.
+
+Each of the 17 positions is predicted without using its ground position in
+training. The old homography retains its bottle-only rule: seven bottles
+when holding out a bottle, and all eight bottles when predicting a laser
+point. The new homography is fitted to the other 16 positions. The physical
+model refits rotation on the other 16 and also removes a held-out laser
+point's elevation from the plane fit. Bottle folds keep all nine independent
+laser elevations. Fixed focal length, principal point and measured lens
+height are unchanged. Point 5 is included; unlocated point 5a is excluded.
+No 12 m clipping or dropped outliers are used in scoring. All homographies
+use OpenCV least squares (`method=0`, no RANSAC); rotations use XY
+ray-plane intersection errors. The winner is then refitted on all eight
+bottles. These are radial prediction errors in metres:
+
+| Held-out point | Old 8-bottle H | 17-point H | Physical |
+|---|---:|---:|---:|
+| Bottle: tape 2 m | 0.2365 | 0.1640 | 0.3544 |
+| Bottle: tape 4 m | 0.3393 | 0.4379 | 0.1104 |
+| Bottle: cross point | 0.2285 | 0.1037 | 0.2912 |
+| Bottle: middle right | 0.3608 | 0.3887 | 0.1397 |
+| Bottle: left | 0.5413 | 0.2790 | 0.6727 |
+| Bottle: rear right | 0.5514 | 0.3220 | 0.1655 |
+| Bottle: rear left | 0.5568 | 0.7019 | 0.9243 |
+| Bottle: back centre | 0.6145 | 0.3912 | 0.3441 |
+| Laser 8 | 0.3680 | 0.5360 | 0.3438 |
+| Laser 7 | 0.1411 | 0.3080 | 0.0666 |
+| Laser 6 | 0.1097 | 0.1038 | 0.2884 |
+| Laser 4 | 0.7541 | 1.2568 | 0.7158 |
+| Laser 5 | 0.4467 | 0.4395 | 0.8824 |
+| Laser 9 | 0.5410 | 0.8003 | 1.2821 |
+| Laser 3 | 0.3895 | 0.3323 | 0.4047 |
+| Laser 1 | 1.9673 | 2.5087 | 3.3825 |
+| Laser 2 | 0.4828 | 0.7727 | 0.6108 |
+| RMS | 0.6472 | 0.8049 | 0.9945 |
+| Maximum | 1.9673 | 2.5087 | 3.3825 |
+
+This compares training procedures on the same 17 targets, including nine
+laser targets that are always out of sample for the old bottle-only model.
+These nearby measurements share one camera and view; the scores do not
+establish accuracy elsewhere. The camera is only about **33 cm high**, so a
+few pixels of row error can substantially change far-edge ground positions.
+Patio/step elevations differ from the lawn: their mapped positions remain
+approximate, with the same 12 m forward cap (null beyond it).
+
+Reproduce fitting, cross-validation and selection with
+`.venv/bin/python tests/fit_ground.py`. Per-point held-out predictions and
+errors for all three candidates are retained in the JSON for inspection.
