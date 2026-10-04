@@ -94,7 +94,11 @@ Camera stills at 2304x1296 with the recorder's settings, and phone photos of the
 
 `motion_polygon` in `vps/ground-calibration.json` uses 1920×1080 recording
 coordinates. It covers the lawn and stepping stones, the steps up to the
-patio, and the area around the table and chairs. Beds, shrubs, mulch and
+patio, and the area around the table and chairs. The table rectangle is
+retained. Former vertices 8, 9 and 10 were removed, connecting former vertex
+7 directly to 11; the current overlays renumber the remaining vertices.
+Some door glazing is intentionally included, as accepted by the operator.
+Detector tracks remain unrestricted. Beds, shrubs, mulch and
 foreground plant silhouettes are excluded, including plants projecting over
 the near-left grass. The foreground outline is conservative around stems.
 
