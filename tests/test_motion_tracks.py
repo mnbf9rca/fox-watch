@@ -6,9 +6,10 @@ import pytest
 from foxcam.media import _unmatched_motion, track
 
 
-def moving_scene(tmp_path, monkeypatch, *, known=True, extras=1, start=10, detector_start=10, step=12):
+def moving_scene(tmp_path, monkeypatch, *, known=True, extras=1, start=10, detector_start=10, step=12,
+                 calibration=None, size=(1920, 1080)):
     source = tmp_path / "mixed.mp4"
-    writer = cv2.VideoWriter(str(source), cv2.VideoWriter_fourcc(*"mp4v"), 10, (1920, 1080))
+    writer = cv2.VideoWriter(str(source), cv2.VideoWriter_fourcc(*"mp4v"), 10, size)
     assert writer.isOpened()
     detections = []
     try:
@@ -27,14 +28,14 @@ def moving_scene(tmp_path, monkeypatch, *, known=True, extras=1, start=10, detec
                 # Below threshold, plus a large stationary newly appearing patch.
                 cv2.rectangle(image, (1200 + frame * 6, 500), (1203 + frame * 6, 503), (180, 180, 180), -1)
                 cv2.rectangle(image, (1400, 700), (1460, 760), (180, 180, 180), -1)
-            writer.write(image)
+            writer.write(cv2.resize(image, size))
             if frame % 2 == 0:
-                detections.append(found)
+                detections.append([(*item[:2], *(round(v * size[0] / 1920) for v in item[2:])) for item in found])
     finally:
         writer.release()
     found = iter(detections)
     monkeypatch.setattr("foxcam.media.detect", lambda image: next(found))
-    return track(source, 25, 120)
+    return track(source, 25, 120, ground_calibration=calibration)
 
 
 @pytest.mark.parametrize("extras", [1, 2])
@@ -92,3 +93,17 @@ def test_first_detector_box_covers_only_preceding_miss_window():
     separate = ("unknown", 1.0, 110, 200, 10, 10)
     motion = [(9, [same]), (10, [same, separate]), (29, [same])]
     assert _unmatched_motion(motion, known) == [(9, [same]), (10, [separate]), (29, [])]
+
+
+@pytest.mark.parametrize("size", [(1920, 1080), (1280, 720)])
+def test_lawn_mask_filters_only_unknown_bottom_centres(tmp_path, monkeypatch, size):
+    calibration = {"image_size": [1920, 1080],
+                   "homography": [[.001, 0, 0], [0, .001, 0], [0, 0, 1]],
+                   "motion_polygon": [[0, 656], [1920, 656], [1920, 700], [0, 700]]}
+    result = moving_scene(tmp_path, monkeypatch, extras=2, calibration=calibration, size=size)
+    assert [item["class"] for item in result["tracks"]].count("cat") == 1  # Outside the mask.
+    unknown = [item for item in result["tracks"] if item["class"] == "unknown"]
+    assert len(unknown) == 1
+    for _, x, y, w, h in unknown[0]["boxes"]:
+        # The first animal's centre is above the polygon, but its feet are in it.
+        assert 656 <= (y + h) * 1080 / size[1] <= 700

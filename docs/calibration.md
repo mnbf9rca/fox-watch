@@ -88,3 +88,28 @@ Camera stills at 2304x1296 with the recorder's settings, and phone photos of the
 - [The marker cylinder against a tape, 30 cm](calibration/05-marker-cylinder-30cm.jpg)
 - [Cross tape seen from the lawn](calibration/06-cross-tape-from-lawn.jpg)
 - [Cross tape looking back towards the camera](calibration/07-cross-tape-looking-back-to-camera.jpg)
+
+
+## Lawn motion mask
+
+`motion_polygon` in `vps/ground-calibration.json` uses the calibration's
+1920×1080 image coordinates. It follows the lawn from the near metal edging
+to the foot of the patio steps/wall, inside the left and right bed edges.
+The lower-left cutout excludes foreground stems projecting over the lawn;
+the narrow far-left strip is excluded because the night still shows a bright
+overhanging leaf there. This deliberately leaves the occluded grass out.
+
+Only unknown motion blobs are filtered: their box bottom-centre must be
+inside or on the polygon. Detector tracks are unrestricted. The polygon
+scales with full-field recording dimensions; initial motion screening is
+unchanged. A calibration without `motion_polygon` keeps unmasked fallback.
+Existing tracks are unchanged until explicitly re-tracked. Redraw this mask
+if the camera moves or plants grow across its boundary.
+
+The numbered vertices on these exact overlays correspond to JSON order;
+the 2304×1296 still coordinates are recording coordinates multiplied by 6/5:
+
+- [Day motion-mask overlay](calibration/08-motion-mask-day.jpg)
+- [Night motion-mask overlay](calibration/09-motion-mask-night.jpg)
+
+Regenerate both overlays with `.venv/bin/python tests/render_motion_mask.py`.

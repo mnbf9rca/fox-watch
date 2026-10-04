@@ -41,6 +41,16 @@ def load_calibration(path: str | Path | None) -> dict | None:
                    + a[2] * (b[0] * c[1] - b[1] * c[0]))
     if not math.isfinite(determinant) or determinant == 0:
         raise ValueError("singular ground calibration")
+    if "motion_polygon" in calibration:
+        polygon = calibration["motion_polygon"]
+        if (not isinstance(polygon, list) or len(polygon) < 3
+                or any(not isinstance(point, list) or len(point) != 2
+                       or any(type(value) not in (int, float) or not math.isfinite(value)
+                              or not 0 <= value <= bound for value, bound in zip(point, size))
+                       for point in polygon)):
+            raise ValueError("invalid motion polygon")
+        if sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(polygon, polygon[1:] + polygon[:1])) == 0:
+            raise ValueError("zero-area motion polygon")
     return calibration
 
 

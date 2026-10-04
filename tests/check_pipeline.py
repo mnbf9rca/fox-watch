@@ -154,7 +154,13 @@ def check(data, live=False, benchmark=False):
     for assignment in shlex.split((root / "vps/foxcam.env.example").read_text(), comments=True):
         key, value = assignment.split("=", 1)
         env.setdefault(key, value)
-    env["GROUND_CALIBRATION"] = str(root / "vps/ground-calibration.json")
+    # The synthetic crossing scene is not the garden: give it a full-frame
+    # polygon while retaining the real projection and exercising mask loading.
+    calibration = json.loads((root / "vps/ground-calibration.json").read_text())
+    calibration["motion_polygon"] = [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]
+    fixture_calibration = data / "fixture-calibration.json"
+    fixture_calibration.write_text(json.dumps(calibration))
+    env["GROUND_CALIBRATION"] = str(fixture_calibration)
     env.update(MIN_FREE_GB="0", EDGE_MARGIN="120" if benchmark else "80", GAP_SECONDS="3",
                PAD_SECONDS="2", RETAIN_NIGHTS="180", START_TIME="19:00", STOP_TIME="07:00", TZ="Europe/London")
     if not live:

@@ -85,3 +85,16 @@ def test_ground_forward_limit_includes_twelve_metres():
     assert mapped[0] == pytest.approx([0, .05, 11.9])
     assert mapped[1] == [1, .05, 12]
     assert mapped[2] == [2, None, None]
+
+
+@pytest.mark.parametrize("polygon", [[], [[0, 0], [1, 1]],
+    [[0, 0], [float("nan"), 2], [3, 4]], [[0, 0], [1921, 0], [3, 4]],
+    [[0, 0], [1, 1], [2, 2]]])
+def test_calibration_rejects_invalid_motion_polygon(tmp_path, polygon):
+    from foxcam.ground import load_calibration
+
+    target = tmp_path / "calibration.json"
+    target.write_text(json.dumps({"image_size": [1920, 1080],
+        "homography": [[1, 0, 0], [0, 1, 0], [0, 0, 1]], "motion_polygon": polygon}))
+    with pytest.raises(ValueError, match="motion polygon"):
+        load_calibration(target)

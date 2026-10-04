@@ -40,6 +40,8 @@ def main():
                    in zip(names, image, recording, ground, estimated, residual, radial)],
     }
     target = Path(__file__).parents[1] / "vps/ground-calibration.json"
+    if target.exists():
+        calibration = json.loads(target.read_text()) | calibration
     target.write_text(json.dumps(calibration, indent=2, allow_nan=False) + "\n")
     print(f"Fit all 8 pairs: RMS {calibration['fit']['rms_radial_m']:.9f} m; max {radial.max():.9f} m")
 

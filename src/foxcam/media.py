@@ -96,15 +96,17 @@ def _frame(video, position: int, clip: Path):
     return image
 
 
-def _blob_boxes(image, subtractor, min_blob_area: float) -> list[tuple]:
+def _blob_boxes(image, subtractor, min_blob_area: float, motion_polygon=None) -> list[tuple]:
     """All sizeable motion components, measured at the same scale as screening."""
     height, width = image.shape[:2]
     small = cv2.resize(image, (SCAN_WIDTH, round(height * SCAN_WIDTH / width)))
     mask = subtractor.apply(small)
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     scale = width / SCAN_WIDTH
-    return [("unknown", 1.0, *[round(value * scale) for value in cv2.boundingRect(contour)])
+    boxes = [("unknown", 1.0, *[round(value * scale) for value in cv2.boundingRect(contour)])
             for contour in contours if cv2.contourArea(contour) > min_blob_area]
+    return [box for box in boxes if motion_polygon is None
+            or cv2.pointPolygonTest(motion_polygon, (box[2] + box[4] / 2, box[3] + box[5]), False) >= 0]
 
 
 def _unmatched_motion(motion: list[tuple[int, list]], tracks: list[dict]) -> list[tuple[int, list]]:
@@ -142,10 +144,15 @@ def track(clip: Path, min_blob_area: float, edge_margin: float, min_track_move_r
         if not ok:
             raise ValueError(f"Cannot decode video: {clip}")
         height, width = image.shape[:2]
+        motion_polygon = None
+        if ground_calibration and "motion_polygon" in ground_calibration:
+            cw, ch = ground_calibration["image_size"]
+            motion_polygon = (np.asarray(ground_calibration["motion_polygon"])
+                              * [width / cw, height / ch]).astype(np.float32)
         detections, motion, frame = [], [], 0
         subtractor = cv2.createBackgroundSubtractorMOG2(detectShadows=False)
         while ok:
-            blobs = _blob_boxes(image, subtractor, min_blob_area)
+            blobs = _blob_boxes(image, subtractor, min_blob_area, motion_polygon)
             if frame:
                 motion.append((frame, blobs))
             if frame % DETECT_INTERVAL == 0:
