@@ -224,8 +224,9 @@ retain the original lawn-only mask; 11/12 show the current polygon.
 
 The **old eight-bottle homography** is selected and stored as the active
 mapping in `vps/ground-calibration.json`: it has the lowest held-out radial
-RMS across all 17 confirmed positions. No physical camera parameters remain
-at the top level to override it. The preceding physical-fit section records
+RMS across all 17 confirmed positions. Runtime mapping accepts only a
+homography; a stray `camera` key cannot switch models. The physical model
+and its rotation helper live only in `tests/fit_ground.py` for comparison. The preceding physical-fit section records
 the earlier experiment, not the current production selection.
 
 Each of the 17 positions is predicted without using its ground position in

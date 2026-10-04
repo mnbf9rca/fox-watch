@@ -1,11 +1,11 @@
 """Cross-validate and refit the ground model from docs/calibration.md; no new dependencies."""
 import json
+import math
 from pathlib import Path
 
 import cv2
 import numpy as np
 
-from foxcam.ground import camera_rotation
 
 
 # Full-sensor image coordinates and documented across/forward metres.
@@ -31,6 +31,20 @@ SURVEY = [
     ("Laser 1", 696, 460, -2.35, 9.15, -.100),
     ("Laser 2", 1290, 444, .74, 9.52, .002),
 ]
+
+
+def camera_rotation(camera: dict) -> np.ndarray:
+    """Camera (right, down, optical forward) to world (across, forward, up).
+
+    Positive pitch looks down, yaw looks right, roll rotates the camera's
+    right axis down. R = yaw(-yaw) @ pitch(-pitch) @ level @ optical_roll.
+    """
+    pitch, roll, yaw = [math.radians(camera[key]) for key in ("pitch_deg", "roll_deg", "yaw_deg")]
+    cp, sp, cr, sr, cy, sy = math.cos(pitch), math.sin(pitch), math.cos(roll), math.sin(roll), math.cos(yaw), math.sin(yaw)
+    return (np.array([[cy, sy, 0], [-sy, cy, 0], [0, 0, 1]])
+            @ np.array([[1, 0, 0], [0, cp, sp], [0, -sp, cp]])
+            @ np.array([[1, 0, 0], [0, 0, 1], [0, -1, 0]])
+            @ np.array([[cr, -sr, 0], [sr, cr, 0], [0, 0, 1]]))
 
 
 def fit_plane(survey, height_m):

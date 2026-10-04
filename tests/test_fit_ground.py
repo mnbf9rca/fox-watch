@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from foxcam.ground import camera_rotation
+from fit_ground import camera_rotation
 
 
 def test_plane_least_squares_uses_all_confirmed_survey_elevations():

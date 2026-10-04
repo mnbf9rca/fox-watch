@@ -106,3 +106,30 @@ def test_calibration_rejects_invalid_motion_polygon(tmp_path, polygon):
         "homography": [[1, 0, 0], [0, 1, 0], [0, 0, 1]], "motion_polygon": polygon}))
     with pytest.raises(ValueError, match="motion polygon"):
         load_calibration(target)
+
+
+@pytest.mark.parametrize("camera", [
+    {"focal_length_px": 100, "height_m": 1, "pitch_deg": 0, "roll_deg": 0, "yaw_deg": 0},
+    {"stale": "unused metadata"},
+])
+def test_stray_camera_key_never_overrides_homography(tmp_path, camera):
+    from foxcam.ground import ground_track, load_calibration
+
+    calibration = {"image_size": [200, 200],
+                   "homography": [[.01, 0, 0], [0, .01, 0], [0, 0, 1]],
+                   "camera": camera, "ground_plane": [0, 0, 0]}
+    path = tmp_path / "calibration.json"
+    path.write_text(json.dumps(calibration))
+    loaded = load_calibration(path)
+    assert ground_track([[7, 110, 100, 20, 20]], 200, 200, loaded) == [[7, 1.2, 1.2]]
+
+
+def test_runtime_calibration_requires_homography_even_with_camera(tmp_path):
+    from foxcam.ground import load_calibration
+
+    path = tmp_path / "physical-only.json"
+    path.write_text(json.dumps({"image_size": [200, 200], "ground_plane": [0, 0, 0],
+        "camera": {"focal_length_px": 100, "height_m": 1,
+                   "pitch_deg": 0, "roll_deg": 0, "yaw_deg": 0}}))
+    with pytest.raises(ValueError, match="ground calibration"):
+        load_calibration(path)
