@@ -83,7 +83,11 @@ def iou(a, b) -> float:
     return overlap / (aw * ah + bw * bh - overlap) if overlap else 0.0
 
 
-def link(detections: list[tuple[int, list]], max_misses: int = 10) -> list[dict]:
+MAX_MISSES = 10
+
+
+def link(detections: list[tuple[int, list]], max_misses: int = MAX_MISSES,
+         *, frame_width: int = 1920) -> list[dict]:
     """Link by same-class IoU, then distance; expire after max_misses processed frames."""
     tracks, live = [], []
     for frame, found in detections:
@@ -101,7 +105,8 @@ def link(detections: list[tuple[int, list]], max_misses: int = 10) -> list[dict]
                 assignments[index] = best
                 matched.add(best["id"])
         # Calibration: a 12 cm bird at 5 m is ~35 px; 1 m travel is ~296 px.
-        # 9 box lengths admits that jump (8.33 lengths), with rounding margin.
+        # Nine box lengths admits that jump; a quarter-frame cap prevents
+        # large animals at opposite edges from joining during short absences.
         # ponytail: nearest centroid can swap nearby same-class movers; add
         # velocity prediction only if field footage demonstrates that ambiguity.
         for index, (name, _, x, y, w, h) in enumerate(found):
@@ -114,7 +119,7 @@ def link(detections: list[tuple[int, list]], max_misses: int = 10) -> list[dict]
                 px, py, pw, ph = track["boxes"][-1][1:]
                 size = min(max(w, h), max(pw, ph))
                 distance = hypot(x + w / 2 - px - pw / 2, y + h / 2 - py - ph / 2)
-                if size > 0 and distance <= 9 * size and distance < best_distance:
+                if size > 0 and distance <= min(9 * size, frame_width / 4) and distance < best_distance:
                     best, best_distance = track, distance
             if best is not None:
                 assignments[index] = best

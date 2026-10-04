@@ -6,13 +6,14 @@ import subprocess
 import cv2
 import numpy as np
 
-from foxcam.detect import detect, iou, link
+from foxcam.detect import MAX_MISSES, detect, iou, link
 from foxcam.edges import nearest_edge
 from foxcam.events import merge_events
 from foxcam.ground import ground_track
 
 
 SCAN_WIDTH = 640
+DETECT_INTERVAL = 2
 
 
 def scan(
@@ -107,12 +108,15 @@ def _blob_boxes(image, subtractor, min_blob_area: float) -> list[tuple]:
 
 
 def _unmatched_motion(motion: list[tuple[int, list]], tracks: list[dict]) -> list[tuple[int, list]]:
-    # Interpolate through detector sampling gaps; hold the final box for its
-    # following unsampled frame. Static detector tracks still explain motion.
+    # Hold the first box back over the detector miss window, interpolate
+    # sampling gaps, then hold the last box for its unsampled frame.
+    # Static detector tracks still explain motion.
     covered = {}
     for item in tracks:
         boxes = item["boxes"]
-        for first, last in zip(boxes, boxes[1:] + [[boxes[-1][0] + 2, *boxes[-1][1:]]]):
+        for frame in range(max(0, boxes[0][0] - MAX_MISSES * DETECT_INTERVAL), boxes[0][0]):
+            covered.setdefault(frame, []).append(boxes[0][1:])
+        for first, last in zip(boxes, boxes[1:] + [[boxes[-1][0] + DETECT_INTERVAL, *boxes[-1][1:]]]):
             for frame in range(first[0], last[0]):
                 fraction = (frame - first[0]) / (last[0] - first[0])
                 box = [a + fraction * (b - a) for a, b in zip(first[1:], last[1:])]
@@ -144,12 +148,12 @@ def track(clip: Path, min_blob_area: float, edge_margin: float, min_track_move_r
             blobs = _blob_boxes(image, subtractor, min_blob_area)
             if frame:
                 motion.append((frame, blobs))
-            if frame % 2 == 0:
+            if frame % DETECT_INTERVAL == 0:
                 detections.append((frame, detect(image)))
             frame += 1
             ok, image = video.read()
-        tracks = link(detections)
-        unknown = link(_unmatched_motion(motion, tracks))
+        tracks = link(detections, frame_width=width)
+        unknown = link(_unmatched_motion(motion, tracks), frame_width=width)
         for item in unknown:
             item["id"] += len(tracks)
         tracks.extend(unknown)

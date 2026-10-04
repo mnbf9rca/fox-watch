@@ -146,3 +146,21 @@ def test_detector_allows_only_people_vehicles_and_animals(monkeypatch):
     found = detector.detect(np.zeros((640, 640, 3), dtype=np.uint8))
     assert [item[0] for item in found] == ["person", "vehicle", "vehicle", "vehicle", "vehicle", "vehicle",
                                           "bird", "cat", "dog", "horse", "sheep", "cow", "bear"]
+
+
+def test_link_separates_cats_entering_opposite_edges_after_short_gap():
+    # 300 px cats at opposite edges, 1.6 s apart at 10 fps: still within
+    # the linker's ten processed-frame miss window, but not the same cat.
+    frames = [(0, [("cat", .9, 1620, 500, 300, 200)])]
+    frames.extend((frame, []) for frame in range(2, 16, 2))
+    frames.append((16, [("cat", .9, 0, 500, 300, 200)]))
+    assert [len(item["boxes"]) for item in link(frames)] == [1, 1]
+
+
+@pytest.mark.parametrize("width", [1280, 1920])
+@pytest.mark.parametrize("extra,count", [(0, 1), (1, 2)])
+def test_link_distance_is_capped_at_quarter_frame_width(width, extra, count):
+    # Keep these boxes disjoint, so only the distance pass can join them.
+    frames = [(0, [("cat", .9, 0, 100, 300, 200)]),
+              (2, [("cat", .9, width // 4 + extra, 100, 300, 200)])]
+    assert len(link(frames, frame_width=width)) == count

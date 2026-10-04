@@ -6,7 +6,7 @@ import pytest
 from foxcam.media import _unmatched_motion, track
 
 
-def moving_scene(tmp_path, monkeypatch, *, known=True, extras=1):
+def moving_scene(tmp_path, monkeypatch, *, known=True, extras=1, start=10, detector_start=10, step=12):
     source = tmp_path / "mixed.mp4"
     writer = cv2.VideoWriter(str(source), cv2.VideoWriter_fourcc(*"mp4v"), 10, (1920, 1080))
     assert writer.isOpened()
@@ -15,14 +15,14 @@ def moving_scene(tmp_path, monkeypatch, *, known=True, extras=1):
         for frame in range(40):
             image = np.full((1080, 1920, 3), 30, dtype=np.uint8)
             found = []
-            if frame >= 10:
-                x = 150 + 12 * (frame - 10)
+            if frame >= start:
+                x = 150 + step * (frame - start)
                 cv2.rectangle(image, (x, 200), (x + 120, 280), (180, 180, 180), -1)
-                if known:
+                if known and frame >= detector_start:
                     found = [("cat", .9, x - 6, 194, 132, 92)]
                 for index in range(extras):
                     # 25 x 12 cm at 9 m: 41 x 20 px at recording resolution.
-                    cv2.ellipse(image, (200 + 12 * (frame - 10), 650 + index * 200),
+                    cv2.ellipse(image, (200 + step * (frame - start), 650 + index * 200),
                                 (20, 9), 0, 0, 360, (180, 180, 180), -1)
                 # Below threshold, plus a large stationary newly appearing patch.
                 cv2.rectangle(image, (1200 + frame * 6, 500), (1203 + frame * 6, 503), (180, 180, 180), -1)
@@ -76,3 +76,19 @@ def test_static_detector_track_still_suppresses_its_motion():
     known = [{"boxes": [[0, 100, 100, 40, 20], [2, 100, 100, 40, 20]]}]
     motion = [(1, [("unknown", 1.0, 110, 105, 10, 10)])]
     assert _unmatched_motion(motion, known) == [(1, [])]
+
+
+def test_late_detector_does_not_duplicate_leading_motion(tmp_path, monkeypatch):
+    result = moving_scene(tmp_path, monkeypatch, extras=1, start=1, detector_start=10, step=14)
+    assert [item["class"] for item in result["tracks"]].count("cat") == 1
+    unknown = [item for item in result["tracks"] if item["class"] == "unknown"]
+    assert len(unknown) == 1, "late cat detection left a duplicate unknown track"
+    assert all(box[2] > 600 for box in unknown[0]["boxes"])
+
+
+def test_first_detector_box_covers_only_preceding_miss_window():
+    known = [{"boxes": [[30, 100, 100, 40, 20]]}]
+    same = ("unknown", 1.0, 110, 105, 10, 10)
+    separate = ("unknown", 1.0, 110, 200, 10, 10)
+    motion = [(9, [same]), (10, [same, separate]), (29, [same])]
+    assert _unmatched_motion(motion, known) == [(9, [same]), (10, [separate]), (29, [])]
