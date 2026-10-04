@@ -178,13 +178,16 @@ def test_map_extreme_finite_points_break_paths_and_single_points_are_visible():
     assert re.findall(r'<circle cx="([^"]+)" cy="([^"]+)"', html) == [("-1", "-2"), ("1", "-3")]
 
 
-def test_map_bounds_include_ground_paths_outside_approximate_patch():
+def test_map_bounds_include_nearby_paths_but_reject_distant_sidecar_points():
     visit = _visit(["fox"])
-    visit["tracks"][0]["ground_track"] = [[0, 5, 11], [1, 7, 3]]
+    visit["tracks"][0]["ground_track"] = [[0, 5, 11], [1, 7, 3], [2, 1, 34.7],
+                                           [3, 1, 17], [4, 0, 12], [5, 1, 12.01]]
     html = render_night("2026-09-28", [visit], "nous/a")
     x, y, width, height = map(float, re.search(r'<svg viewBox="([^"]+)"', html)[1].split())
     assert x <= 4.5 and x + width >= 7.5
-    assert y <= -11.5 and y + height >= -.5
+    assert y == -12 and y + height >= -.5
+    assert '<circle cx="0" cy="-12"' in html
+    assert "-34.7" not in html and "-17" not in html and "-12.01" not in html
     assert x <= -5 and x + width >= 6 and y + height >= 1
     assert 'd="M 5 -11 L 7 -3"' in html
     legacy = render_night("2026-09-28", [_visit(["fox"])], "nous/a")

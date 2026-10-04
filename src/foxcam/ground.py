@@ -9,6 +9,10 @@ import math
 from pathlib import Path
 
 
+# The patio wall is 9.5 m away; allow some fitting/box error beyond it.
+MAX_FORWARD_M = 12
+
+
 # Approximate 8 m square: centre line is 4 degrees right of the camera axis,
 # ending 8.8 m from the camera. Exact lawn corners have not been surveyed.
 PATCH_OUTLINE_M = tuple(
@@ -45,7 +49,7 @@ def ground_track(boxes: list[list], width: int, height: int,
     """Return [frame, across metres, forward metres], nulling unsafe estimates.
 
     Resizing is valid only for the same full camera field of view. Values at
-    the horizon, behind the camera or over 100 m away are not usable here.
+    the horizon, behind the camera or beyond 12 m forward are not usable here.
     """
     if width <= 0 or height <= 0:
         raise ValueError("invalid recording dimensions")
@@ -63,6 +67,6 @@ def ground_track(boxes: list[list], width: int, height: int,
         if not all(math.isfinite(value) for value in projected) or abs(projected[2]) < 1e-6:
             continue
         across, forward = (projected[0] / projected[2], projected[1] / projected[2])
-        if math.isfinite(across) and math.isfinite(forward) and forward >= 0 and math.hypot(across, forward) <= 100:
+        if math.isfinite(across) and math.isfinite(forward) and 0 <= forward <= MAX_FORWARD_M and math.hypot(across, forward) <= 100:
             point[1:] = [across, forward]
     return points

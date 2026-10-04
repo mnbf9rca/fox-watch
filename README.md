@@ -27,9 +27,9 @@ op run --env-file=.env.tpl -- .venv/bin/python tests/check_pipeline.py --live
 Put completed MP4 files in `data/incoming/`, with UTC names such as `2026-09-28T19-05-00Z.mp4`. Copy only completed recordings. Load the committed nonsecret template inside the child shell:
 
 ```sh
-op run --env-file=.env.tpl -- sh -c 'set -a; . ./vps/foxcam.env.example; exec .venv/bin/python -m foxcam run --data ./data'
-op run --env-file=.env.tpl -- sh -c 'set -a; . ./vps/foxcam.env.example; exec .venv/bin/python -m foxcam run --data ./data --night 2026-09-28'
-(set -a; . ./vps/foxcam.env.example; .venv/bin/python -m foxcam compare --data ./data)
+op run --env-file=.env.tpl -- sh -c 'set -a; . ./vps/foxcam.env.example; GROUND_CALIBRATION=vps/ground-calibration.json; exec .venv/bin/python -m foxcam run --data ./data'
+op run --env-file=.env.tpl -- sh -c 'set -a; . ./vps/foxcam.env.example; GROUND_CALIBRATION=vps/ground-calibration.json; exec .venv/bin/python -m foxcam run --data ./data --night 2026-09-28'
+(set -a; . ./vps/foxcam.env.example; GROUND_CALIBRATION=vps/ground-calibration.json; .venv/bin/python -m foxcam compare --data ./data)
 ```
 
 `compare` needs configuration but no secrets and makes no network calls. It prints agreement counts against `PRIMARY_MODEL`, excluding missing or unclassified answers; an empty denominator is `n/a`. `run` requires keys only for providers in `MODELS`. Its default data directory is `/data/foxcam`. Use one process at a time; the VPS cron entry and manual command below use `/run/lock/foxcam.lock`.
@@ -41,7 +41,7 @@ Clip names use the source UTC timestamp plus the unpadded motion offset. Sidecar
 To move existing visits into local calendar-day folders and rebuild the site, run this with processing stopped (no provider keys are needed):
 
 ```sh
-(set -a; . ./vps/foxcam.env.example; .venv/bin/python -m foxcam refile --data ./data)
+(set -a; . ./vps/foxcam.env.example; GROUND_CALIBRATION=vps/ground-calibration.json; .venv/bin/python -m foxcam refile --data ./data)
 ```
 
 `refile` moves raw and annotated clips, all saved frames (including track crops), and sidecars using `os.replace`, updates each `night` field, and prints the sidecar count. It checks all destinations before moving and refuses existing targets. A completed rerun moves zero sidecars. Moves are atomic per file, not a transaction across the whole bundle; retain a backup when migrating valuable recordings.

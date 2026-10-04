@@ -61,3 +61,27 @@ def test_measured_eight_point_fit_and_residuals():
     assert calibration["fit"]["rms_radial_m"] == pytest.approx(0.2038601506, abs=1e-8)
     assert calibration["fit"]["max_radial_m"] == pytest.approx(0.3049634949, abs=1e-8)
     assert calibration["points"][0]["image_recording_px"] == pytest.approx([734.1666666667, 612.5])
+
+
+def test_garden_mapping_rejects_shrub_top_horizon_artifacts():
+    from foxcam.ground import ground_track, load_calibration
+
+    calibration = load_calibration(Path(__file__).parents[1] / "vps/ground-calibration.json")
+    # At the image centre these bottoms project to about 34.7 m and 17 m;
+    # the patio wall is only 9.5 m away.
+    boxes = [[0, 950, 280, 20, 20], [1, 950, 310, 20, 20], [2, 950, 380, 20, 20]]
+    mapped = ground_track(boxes, 1920, 1080, calibration)
+    assert mapped[:2] == [[0, None, None], [1, None, None]]
+    assert 0 < mapped[2][2] < 12
+
+
+def test_ground_forward_limit_includes_twelve_metres():
+    from foxcam.ground import ground_track
+
+    calibration = {"image_size": [1920, 1080],
+                   "homography": [[.01, 0, 0], [0, .1, 0], [0, 0, 1]]}
+    boxes = [[0, 0, 109, 10, 10], [1, 0, 110, 10, 10], [2, 0, 111, 10, 10]]
+    mapped = ground_track(boxes, 1920, 1080, calibration)
+    assert mapped[0] == pytest.approx([0, .05, 11.9])
+    assert mapped[1] == [1, .05, 12]
+    assert mapped[2] == [2, None, None]

@@ -10,7 +10,7 @@ from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 from foxcam.classify import parse_answer
-from foxcam.ground import PATCH_OUTLINE_M
+from foxcam.ground import MAX_FORWARD_M, PATCH_OUTLINE_M
 
 
 PALETTE = dict(fox="#a84300", hedgehog="#626400", cat="#7051a1", badger="#333333",
@@ -53,7 +53,7 @@ def _ground_segments(rows):
             if any(type(value) not in (int, float) or not math.isfinite(value)
                    for value in (across, forward)):
                 raise ValueError("invalid ground coordinate")
-            valid = forward >= 0 and math.hypot(across, forward) <= 100
+            valid = 0 <= forward <= MAX_FORWARD_M and math.hypot(across, forward) <= 100
         if valid:
             current.append((across, -forward))
         elif current:
@@ -150,8 +150,9 @@ def render_night(night: str, visits: list[dict], primary_model: str) -> str:
     if map_points:
         xs, ys = zip(*map_points)
         # Keep the outline, edge labels and scale bar in view, then include
-        # every accepted path point with a half-metre margin.
-        left, top = min(-5, min(xs)) - .5, min(-10, min(ys)) - .5
+        # accepted points with a half-metre margin, bounded by the garden depth.
+        left = min(-5, min(xs)) - .5
+        top = max(-MAX_FORWARD_M, min(-10, min(ys)) - .5)
         right, bottom = max(6, max(xs)) + .5, max(1, max(ys)) + .5
         viewbox = f"{left:g} {top:g} {right - left:g} {bottom - top:g}"
     content = f'''<p><a href="index.html">All days</a> · Primary model: {escape(primary_model)}</p>
