@@ -76,3 +76,15 @@ sudo systemctl start foxcam-record.service
 ```
 
 Place a marker of known height at several measured points spread across the lawn: at least two on a tape from the camera, two either side of it at mid distance, and two at the far edge. Record each range from the camera and, for points off the tape, the offset from it. Read each marker's base position and height from the still and recompute the tables above.
+
+## Photos
+
+Camera stills at 2304x1296 with the recorder's settings, and phone photos of the setup. All metadata except the colour profile has been stripped.
+
+- [Rear markers at 8.5 m and 9.05 m](calibration/01-camera-rear-markers-8.5m-9.05m.jpg)
+- [Markers on the tape at 2 m and 4 m](calibration/02-camera-tape-markers-2m-4m.jpg)
+- [Cross tape at 4.2 m, middle right marker at 4.9 m](calibration/03-camera-cross-tape-4.2m.jpg)
+- [Left marker at 6.2 m, tape along the centre line to the back of the grass at 8.8 m](calibration/04-camera-left-6.2m-centre-line-8.8m.jpg)
+- [The marker cylinder against a tape, 30 cm](calibration/05-marker-cylinder-30cm.jpg)
+- [Cross tape seen from the lawn](calibration/06-cross-tape-from-lawn.jpg)
+- [Cross tape looking back towards the camera](calibration/07-cross-tape-looking-back-to-camera.jpg)
