@@ -207,3 +207,9 @@ Plane elevation residuals (fitted minus surveyed), in metres:
 | Laser 2 | -0.0288 |
 
 Reproduce both fits and residual sets with `.venv/bin/python tests/fit_ground.py`.
+
+The motion mask was also extended to the whole near-left lawn and stepping
+stones, down to the metal edging. This supersedes the earlier conservative
+cutout described above: grass behind overhanging stems is now included; beds,
+shrubs, patio and foreground mulch remain outside. The linked day/night
+overlays (08 and 09) show the updated numbered vertices.

@@ -606,26 +606,26 @@
     ],
     [
       610,
-      846
+      900
     ],
     [
       470,
-      805
+      922
     ],
     [
-      405,
-      680
+      250,
+      950
     ],
     [
-      340,
-      550
+      0,
+      980
     ],
     [
-      110,
-      550
+      0,
+      495
     ]
   ],
-  "motion_polygon_note": "Lawn traced from .research/lawn-still-2304.jpg and checked on lawn-night-flood-2304.jpg; 1920x1080 coordinates (stills scaled by 5/6). Unknown motion bottom-centres only, inclusive boundary; excludes beds and foreground plants. Redraw after camera movement.",
+  "motion_polygon_note": "Whole lawn including near-left wedge and stepping stones, to metal edging; excludes beds, shrubs, patio and foreground mulch. Grass behind overhanging stems remains included. Coordinates at 1920x1080; detector tracks unrestricted.",
   "model": "pinhole_plane",
   "camera": {
     "focal_length_px": 1478.3333333333333,
