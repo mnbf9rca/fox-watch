@@ -44,30 +44,33 @@ def test_calibration_loader_is_optional_and_rejects_invalid_matrices(tmp_path):
         load_calibration(target)
 
 
-def test_measured_eight_point_fit_and_residuals():
+def test_physical_survey_fit_and_runtime_residuals():
     from foxcam.ground import ground_track, load_calibration
 
     calibration = load_calibration(Path(__file__).parents[1] / "vps/ground-calibration.json")
-    pairs = [(881, 735, -.30, 1.98), (858, 582, -.65, 3.95), (847, 593, -.71, 4.15),
-             (1874, 514, 1.84, 4.54), (156, 582, -3.03, 5.41), (1597, 439, 2.07, 8.24),
-             (723, 484, -2.13, 8.80), (1281, 444, .64, 8.78)]
-    boxes = [[i, x - 3, y - 30, 6, 30] for i, (x, y, _, _) in enumerate(pairs)]
-    mapped = ground_track(boxes, 2304, 1296, calibration)
-    errors = [math.hypot(a - expected_a, f - expected_f)
-              for (_, a, f), (_, _, expected_a, expected_f) in zip(mapped, pairs)]
-    assert len(calibration["points"]) == 8
-    assert math.sqrt(sum(error ** 2 for error in errors) / 8) == pytest.approx(0.2038601506, abs=1e-8)
-    assert max(errors) == pytest.approx(0.3049634949, abs=1e-8)
-    assert calibration["fit"]["rms_radial_m"] == pytest.approx(0.2038601506, abs=1e-8)
-    assert calibration["fit"]["max_radial_m"] == pytest.approx(0.3049634949, abs=1e-8)
-    assert calibration["points"][0]["image_recording_px"] == pytest.approx([734.1666666667, 612.5])
+    assert "homography" not in calibration
+    assert len(calibration["points"]) == 17
+    assert calibration["camera"]["focal_length_px"] == pytest.approx(1774 * 5 / 6)
+    assert calibration["camera"]["height_m"] == .327
+    errors = []
+    for i, point in enumerate(calibration["points"]):
+        x, y = point["image_measurement_px"]
+        mapped = ground_track([[i, x - 3, y - 30, 6, 30]], 2304, 1296, calibration)[0][1:]
+        assert mapped == pytest.approx(point["fitted_ground_m"])
+        error = math.dist(mapped, point["measured_ground_m"])
+        assert error == pytest.approx(point["radial_error_m"])
+        errors.append(error)
+    assert math.sqrt(sum(error ** 2 for error in errors) / 17) == pytest.approx(.6108952146)
+    assert max(errors) == pytest.approx(1.4335569602)
+    assert calibration["fit"]["plane_rms_vertical_m"] == pytest.approx(.02688391809)
+    assert calibration["fit"]["old_homography_rms_radial_m"] == pytest.approx(.5849001826)
 
 
 def test_garden_mapping_rejects_shrub_top_horizon_artifacts():
     from foxcam.ground import ground_track, load_calibration
 
     calibration = load_calibration(Path(__file__).parents[1] / "vps/ground-calibration.json")
-    # At the image centre these bottoms project to about 34.7 m and 17 m;
+    # These shrub-top bottoms project beyond the 12 m bound;
     # the patio wall is only 9.5 m away.
     boxes = [[0, 950, 280, 20, 20], [1, 950, 310, 20, 20], [2, 950, 380, 20, 20]]
     mapped = ground_track(boxes, 1920, 1080, calibration)

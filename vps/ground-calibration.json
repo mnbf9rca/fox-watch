@@ -1,5 +1,5 @@
 {
-  "source": "docs/calibration.md, 2026-10-04 Camera Module 3 NoIR; fixed garden view",
+  "source": "docs/calibration.md: eight bottle positions and nine confirmed laser points, 2026-10-04",
   "image_size": [
     1920,
     1080
@@ -12,29 +12,18 @@
     5,
     6
   ],
-  "axes": "Camera (0,0); across positive right, forward along camera axis, metres",
+  "axes": "World (across, forward, up), metres; z=0 is ground directly below lens at (0,0,0.327)",
   "limitations": "Ground-plane estimate, invalid for airborne birds; repeat if camera moves",
-  "homography": [
-    [
-      -0.0018800102341697514,
-      -0.0004799779314600362,
-      1.9753154322793236
-    ],
-    [
-      6.637704673488177e-05,
-      0.004030954997903642,
-      -4.5086178815153755
-    ],
-    [
-      -0.00020601582833871312,
-      -0.002984825561864521,
-      0.9999999999999999
-    ]
-  ],
   "fit": {
-    "method": "OpenCV findHomography method=0, least squares using all eight pairs",
-    "rms_radial_m": 0.20386015059160248,
-    "max_radial_m": 0.3049634948764898
+    "method": "OLS plane on nine laser elevations; fixed-intrinsics rotation minimizes summed XY ray-plane intersection errors for all 17 confirmed positions",
+    "excluded_points": [
+      "Laser 5a: no marked pixel or bearing"
+    ],
+    "plane_rms_vertical_m": 0.026883918092801305,
+    "rms_radial_m": 0.6108952146125988,
+    "max_radial_m": 1.4335569601635103,
+    "old_homography_rms_radial_m": 0.5849001826345674,
+    "old_homography_max_radial_m": 1.9673165382543611
   },
   "patch_outline_m": [
     [
@@ -57,10 +46,10 @@
   "patch_outline_note": "Approximate 8 m square, centre line 4 degrees right, far edge at 8.8 m; corners not surveyed",
   "points": [
     {
-      "name": "Tape at 2 m",
+      "name": "Bottle: tape 2 m",
       "image_measurement_px": [
-        881.0,
-        735.0
+        881,
+        735
       ],
       "image_recording_px": [
         734.1666666666667,
@@ -71,20 +60,25 @@
         1.98
       ],
       "fitted_ground_m": [
-        -0.30740351995295867,
-        2.0326864317074564
+        -0.36676444692324395,
+        2.3277017836222913
       ],
       "residual_m": [
+        -0.06676444692324396,
+        0.3477017836222913
+      ],
+      "radial_error_m": 0.35405369890327276,
+      "old_homography_residual_m": [
         -0.0074035199529586815,
         0.05268643170745646
       ],
-      "radial_error_m": 0.05320406181635318
+      "old_homography_radial_error_m": 0.05320406181635318
     },
     {
-      "name": "Tape at 4 m",
+      "name": "Bottle: tape 4 m",
       "image_measurement_px": [
-        858.0,
-        582.0
+        858,
+        582
       ],
       "image_recording_px": [
         715.0,
@@ -95,20 +89,25 @@
         3.95
       ],
       "fitted_ground_m": [
-        -0.6695089757593858,
-        4.212421245500298
+        -0.6765958172394823,
+        4.056211109225204
       ],
       "residual_m": [
+        -0.026595817239482233,
+        0.10621110922520405
+      ],
+      "radial_error_m": 0.10949035216622588,
+      "old_homography_residual_m": [
         -0.019508975759385816,
         0.2624212455002981
       ],
-      "radial_error_m": 0.26314541650028417
+      "old_homography_radial_error_m": 0.26314541650028417
     },
     {
-      "name": "Cross point",
+      "name": "Bottle: cross point",
       "image_measurement_px": [
-        847.0,
-        593.0
+        847,
+        593
       ],
       "image_recording_px": [
         705.8333333333334,
@@ -119,20 +118,25 @@
         4.15
       ],
       "fitted_ground_m": [
-        -0.6627064452542609,
-        3.980894383255009
+        -0.6695517492259552,
+        3.86358303599303
       ],
       "residual_m": [
+        0.04044825077404479,
+        -0.28641696400697025
+      ],
+      "radial_error_m": 0.2892589467270634,
+      "old_homography_residual_m": [
         0.04729355474573904,
         -0.16910561674499114
       ],
-      "radial_error_m": 0.17559439038645866
+      "old_homography_radial_error_m": 0.17559439038645866
     },
     {
-      "name": "Middle right",
+      "name": "Bottle: middle right",
       "image_measurement_px": [
-        1874.0,
-        514.0
+        1874,
+        514
       ],
       "image_recording_px": [
         1561.6666666666667,
@@ -143,20 +147,25 @@
         4.54
       ],
       "fitted_ground_m": [
-        1.9429679743017056,
-        4.462246309575976
+        1.7947607064378006,
+        4.415051409949674
       ],
       "residual_m": [
+        -0.04523929356219947,
+        -0.12494859005032577
+      ],
+      "radial_error_m": 0.13288620634803008,
+      "old_homography_residual_m": [
         0.10296797430170557,
         -0.07775369042402414
       ],
-      "radial_error_m": 0.12902728434851166
+      "old_homography_radial_error_m": 0.12902728434851166
     },
     {
-      "name": "Left",
+      "name": "Bottle: left",
       "image_measurement_px": [
-        156.0,
-        582.0
+        156,
+        582
       ],
       "image_recording_px": [
         130.0,
@@ -167,20 +176,25 @@
         5.41
       ],
       "fitted_ground_m": [
-        -3.157786459505688,
-        5.364366006761478
+        -2.743606835876417,
+        4.872712174990715
       ],
       "residual_m": [
+        0.2863931641235826,
+        -0.537287825009285
+      ],
+      "radial_error_m": 0.6088507627981797,
+      "old_homography_residual_m": [
         -0.12778645950568812,
         -0.04563399323852213
       ],
-      "radial_error_m": 0.1356902375703291
+      "old_homography_radial_error_m": 0.1356902375703291
     },
     {
-      "name": "Rear right",
+      "name": "Bottle: rear right",
       "image_measurement_px": [
-        1597.0,
-        439.0
+        1597,
+        439
       ],
       "image_recording_px": [
         1330.8333333333335,
@@ -191,20 +205,25 @@
         8.24
       ],
       "fitted_ground_m": [
-        1.9180980673630719,
-        8.04548234795876
+        2.0346170467247906,
+        8.12600653402704
       ],
       "residual_m": [
+        -0.03538295327520924,
+        -0.11399346597296045
+      ],
+      "radial_error_m": 0.11935855087510125,
+      "old_homography_residual_m": [
         -0.15190193263692797,
         -0.19451765204123994
       ],
-      "radial_error_m": 0.24680217603268959
+      "old_homography_radial_error_m": 0.24680217603268959
     },
     {
-      "name": "Rear left",
+      "name": "Bottle: rear left",
       "image_measurement_px": [
-        723.0,
-        484.0
+        723,
+        484
       ],
       "image_recording_px": [
         602.5,
@@ -215,20 +234,25 @@
         8.8
       ],
       "fitted_ground_m": [
-        -1.978688708930401,
-        8.66698465932592
+        -1.9331550159493969,
+        8.05152644583564
       ],
       "residual_m": [
+        0.19684498405060302,
+        -0.7484735541643612
+      ],
+      "radial_error_m": 0.7739254544394526,
+      "old_homography_residual_m": [
         0.15131129106959884,
         -0.13301534067408127
       ],
-      "radial_error_m": 0.20146510283369365
+      "old_homography_radial_error_m": 0.20146510283369365
     },
     {
-      "name": "Back of grass, centre line",
+      "name": "Bottle: back centre",
       "image_measurement_px": [
-        1281.0,
-        444.0
+        1281,
+        444
       ],
       "image_recording_px": [
         1067.5,
@@ -239,14 +263,280 @@
         8.78
       ],
       "fitted_ground_m": [
-        0.6450280092117381,
-        9.084922043038297
+        0.6647865094925626,
+        9.055249195920723
       ],
       "residual_m": [
+        0.02478650949256256,
+        0.2752491959207237
+      ],
+      "radial_error_m": 0.27636296949452155,
+      "old_homography_residual_m": [
         0.0050280092117380715,
         0.30492204303829773
       ],
-      "radial_error_m": 0.3049634948764898
+      "old_homography_radial_error_m": 0.3049634948764898
+    },
+    {
+      "name": "Laser 8",
+      "image_measurement_px": [
+        86,
+        792
+      ],
+      "image_recording_px": [
+        71.66666666666667,
+        660.0
+      ],
+      "measured_ground_m": [
+        -1.22,
+        2.04
+      ],
+      "fitted_ground_m": [
+        -1.3625572625971227,
+        2.218887068358386
+      ],
+      "residual_m": [
+        -0.14255726259712276,
+        0.17888706835838608
+      ],
+      "radial_error_m": 0.2287425547313899,
+      "old_homography_residual_m": [
+        -0.32739472382992685,
+        -0.16802051335063606
+      ],
+      "old_homography_radial_error_m": 0.3679921168969321
+    },
+    {
+      "name": "Laser 7",
+      "image_measurement_px": [
+        472,
+        671
+      ],
+      "image_recording_px": [
+        393.33333333333337,
+        559.1666666666667
+      ],
+      "measured_ground_m": [
+        -1.15,
+        2.99
+      ],
+      "fitted_ground_m": [
+        -1.1805809564733327,
+        3.0405077337161823
+      ],
+      "residual_m": [
+        -0.03058095647333281,
+        0.05050773371618211
+      ],
+      "radial_error_m": 0.059044272067395626,
+      "old_homography_residual_m": [
+        -0.13986047617341035,
+        -0.018811029310330074
+      ],
+      "old_homography_radial_error_m": 0.14111983425148708
+    },
+    {
+      "name": "Laser 6",
+      "image_measurement_px": [
+        679,
+        601
+      ],
+      "image_recording_px": [
+        565.8333333333334,
+        500.83333333333337
+      ],
+      "measured_ground_m": [
+        -1.1,
+        4.12
+      ],
+      "fitted_ground_m": [
+        -1.039262393095384,
+        3.8708065145378403
+      ],
+      "residual_m": [
+        0.06073760690461616,
+        -0.2491934854621598
+      ],
+      "radial_error_m": 0.2564886938819708,
+      "old_homography_residual_m": [
+        0.002393911434223739,
+        -0.10963176250299078
+      ],
+      "old_homography_radial_error_m": 0.1096578960288181
+    },
+    {
+      "name": "Laser 4",
+      "image_measurement_px": [
+        2050,
+        506
+      ],
+      "image_recording_px": [
+        1708.3333333333335,
+        421.6666666666667
+      ],
+      "measured_ground_m": [
+        1.92,
+        3.8
+      ],
+      "fitted_ground_m": [
+        2.222177178627226,
+        4.396366770124708
+      ],
+      "residual_m": [
+        0.30217717862722626,
+        0.5963667701247077
+      ],
+      "radial_error_m": 0.668553940824588,
+      "old_homography_residual_m": [
+        0.43651598818572745,
+        0.6149141037952939
+      ],
+      "old_homography_radial_error_m": 0.7540991731782576
+    },
+    {
+      "name": "Laser 5",
+      "image_measurement_px": [
+        863,
+        518
+      ],
+      "image_recording_px": [
+        719.1666666666667,
+        431.6666666666667
+      ],
+      "measured_ground_m": [
+        -1.08,
+        6.66
+      ],
+      "fitted_ground_m": [
+        -0.9445981674309869,
+        5.81677259903153
+      ],
+      "residual_m": [
+        0.13540183256901317,
+        -0.8432274009684697
+      ],
+      "radial_error_m": 0.8540293355658736,
+      "old_homography_residual_m": [
+        0.12701032885290164,
+        -0.4282223376418308
+      ],
+      "old_homography_radial_error_m": 0.44666093862207873
+    },
+    {
+      "name": "Laser 9",
+      "image_measurement_px": [
+        161,
+        581
+      ],
+      "image_recording_px": [
+        134.16666666666669,
+        484.1666666666667
+      ],
+      "measured_ground_m": [
+        -3.3,
+        5.91
+      ],
+      "fitted_ground_m": [
+        -2.7413395834547707,
+        4.893648269423239
+      ],
+      "residual_m": [
+        0.5586604165452291,
+        -1.016351730576761
+      ],
+      "radial_error_m": 1.1597725213423822,
+      "old_homography_residual_m": [
+        0.14705603773490905,
+        -0.5206318076168079
+      ],
+      "old_homography_radial_error_m": 0.5410018089957148
+    },
+    {
+      "name": "Laser 3",
+      "image_measurement_px": [
+        1716,
+        443
+      ],
+      "image_recording_px": [
+        1430.0,
+        369.1666666666667
+      ],
+      "measured_ground_m": [
+        2.45,
+        7.71
+      ],
+      "fitted_ground_m": [
+        2.355097443892394,
+        7.427953528173868
+      ],
+      "residual_m": [
+        -0.094902556107606,
+        -0.2820464718261322
+      ],
+      "radial_error_m": 0.29758479031248636,
+      "old_homography_residual_m": [
+        -0.20462951065292811,
+        -0.33143999779093036
+      ],
+      "old_homography_radial_error_m": 0.38951984386640526
+    },
+    {
+      "name": "Laser 1",
+      "image_measurement_px": [
+        696,
+        460
+      ],
+      "image_recording_px": [
+        580.0,
+        383.33333333333337
+      ],
+      "measured_ground_m": [
+        -2.35,
+        9.15
+      ],
+      "fitted_ground_m": [
+        -2.6835620843340915,
+        10.544210132629921
+      ],
+      "residual_m": [
+        -0.3335620843340914,
+        1.3942101326299206
+      ],
+      "radial_error_m": 1.4335569601635103,
+      "old_homography_residual_m": [
+        -0.30829183755880374,
+        1.9430106805120086
+      ],
+      "old_homography_radial_error_m": 1.9673165382543611
+    },
+    {
+      "name": "Laser 2",
+      "image_measurement_px": [
+        1290,
+        444
+      ],
+      "image_recording_px": [
+        1075.0,
+        370.0
+      ],
+      "measured_ground_m": [
+        0.74,
+        9.52
+      ],
+      "fitted_ground_m": [
+        0.707063382508236,
+        9.012456680425034
+      ],
+      "residual_m": [
+        -0.03293661749176402,
+        -0.5075433195749657
+      ],
+      "radial_error_m": 0.5086108945126663,
+      "old_homography_residual_m": [
+        -0.054759216663043286,
+        -0.47968437271656406
+      ],
+      "old_homography_radial_error_m": 0.4827998231545178
     }
   ],
   "motion_polygon": [
@@ -335,5 +625,66 @@
       550
     ]
   ],
-  "motion_polygon_note": "Lawn traced from .research/lawn-still-2304.jpg and checked on lawn-night-flood-2304.jpg; 1920x1080 coordinates (stills scaled by 5/6). Unknown motion bottom-centres only, inclusive boundary; excludes beds and foreground plants. Redraw after camera movement."
+  "motion_polygon_note": "Lawn traced from .research/lawn-still-2304.jpg and checked on lawn-night-flood-2304.jpg; 1920x1080 coordinates (stills scaled by 5/6). Unknown motion bottom-centres only, inclusive boundary; excludes beds and foreground plants. Redraw after camera movement.",
+  "model": "pinhole_plane",
+  "camera": {
+    "focal_length_px": 1478.3333333333333,
+    "height_m": 0.327,
+    "pitch_deg": 6.771198814450813,
+    "roll_deg": 1.431915925199674,
+    "yaw_deg": -0.09547217609502268
+  },
+  "ground_plane": [
+    -0.15401281051116728,
+    0.025221422015124867,
+    0.0457512973537089
+  ],
+  "rotation_convention": "Positive pitch down, yaw right, roll right-axis down; principal point at image centre",
+  "survey_elevations": [
+    {
+      "name": "Laser 8",
+      "measured_relative_lens_m": -0.38,
+      "residual_m": -0.038450298768053476
+    },
+    {
+      "name": "Laser 7",
+      "measured_relative_lens_m": -0.37,
+      "residual_m": -0.003221066740971265
+    },
+    {
+      "name": "Laser 6",
+      "measured_relative_lens_m": -0.34,
+      "residual_m": 0.019738970369476055
+    },
+    {
+      "name": "Laser 4",
+      "measured_relative_lens_m": -0.26,
+      "residual_m": 0.001267249701966261
+    },
+    {
+      "name": "Laser 5",
+      "measured_relative_lens_m": -0.195,
+      "residual_m": -0.00854830591180089
+    },
+    {
+      "name": "Laser 9",
+      "measured_relative_lens_m": -0.34,
+      "residual_m": 0.04614666419934027
+    },
+    {
+      "name": "Laser 3",
+      "measured_relative_lens_m": -0.1,
+      "residual_m": 0.03352217602298427
+    },
+    {
+      "name": "Laser 1",
+      "measured_relative_lens_m": -0.1,
+      "residual_m": -0.021658781460274307
+    },
+    {
+      "name": "Laser 2",
+      "measured_relative_lens_m": 0.002,
+      "residual_m": -0.02879660741266621
+    }
+  ]
 }

@@ -134,3 +134,76 @@ Pixel positions are the measured spots in the full-sensor still `docs/calibratio
 | 2 | Base of patio wall, centre | 1290, 444 | +4.4° | 9.549 m | 8.8 cm | +0.2 cm | +0.74 | 9.52 |
 
 The lawn rises about 28 cm from the near stepping stones to the far corners, roughly 3 percent, and the right side sits about 8 cm higher than the left at similar distances. The patio wall base is level with the lens, about 10 cm above the far lawn corners. Point 5's pairing was confirmed by the user: the farther slab is 6.747 m with the line 28.5 cm above it, the nearer 6.014 m with 35.0 cm. Point 5a has no marked pixel; locate its right-hand end in the still before using its position, or use its elevation only.
+
+## Physical ground refit, 2026-10-04
+
+The calibration now uses a pinhole camera and one lawn plane. All **17
+confirmed positions** (eight bottles and nine laser points, including the
+newly confirmed farther slab 5) are used. Point 5a is skipped: without its
+bearing or pixel, its elevation cannot be placed on the plane. Focal length
+is fixed at 1774 px at 2304×1296, scaled to 1478.333333 px at 1920×1080;
+the principal point is (960, 540).
+
+World coordinates are (across, forward, up), in metres. The lens is at
+(0, 0, 0.327), with z=0 at the ground directly below it. Ordinary least
+squares on the nine laser elevations, adding 0.327 m to lens-relative
+heights, gives:
+
+`z = -0.1540128105 + 0.0252214220 * across + 0.0457512974 * forward`
+
+The free intercept extrapolates the lawn 15.4 cm below that local ground
+reference at the camera; the lawn fit is not forced through the local ground
+point. Elevation residual RMS is 0.026884 m.
+
+Rotation minimizes squared across/forward errors from ray intersections with
+this same plane for all 17 positions. Bottles use plane elevations; surveyed
+surface variations affect the plane fit rather than introducing separate
+surfaces into runtime mapping. Pitch is 6.771199° down, roll 1.431916°
+(camera-right axis down), and yaw −0.095472° (right positive). The JSON
+records these conventions and all residual vectors. Rays parallel to the
+plane, intersecting behind the lens, or landing beyond 12 m forward remain
+null. Older calibration files can still use a homography; the production
+JSON contains only the physical model.
+
+Ground residuals below are radial distances in metres. The baseline is the
+original eight-bottle homography evaluated on all 17 positions. The physical
+model has slightly higher RMS and a smaller worst error; the plane and fixed
+intrinsics do not remove inconsistencies between the measurements.
+
+| Point | Physical | Old homography |
+|---|---:|---:|
+| Bottle: tape 2 m | 0.3541 | 0.0532 |
+| Bottle: tape 4 m | 0.1095 | 0.2631 |
+| Bottle: cross point | 0.2893 | 0.1756 |
+| Bottle: middle right | 0.1329 | 0.1290 |
+| Bottle: left | 0.6089 | 0.1357 |
+| Bottle: rear right | 0.1194 | 0.2468 |
+| Bottle: rear left | 0.7739 | 0.2015 |
+| Bottle: back centre | 0.2764 | 0.3050 |
+| Laser 8 | 0.2287 | 0.3680 |
+| Laser 7 | 0.0590 | 0.1411 |
+| Laser 6 | 0.2565 | 0.1097 |
+| Laser 4 | 0.6686 | 0.7541 |
+| Laser 5 | 0.8540 | 0.4467 |
+| Laser 9 | 1.1598 | 0.5410 |
+| Laser 3 | 0.2976 | 0.3895 |
+| Laser 1 | 1.4336 | 1.9673 |
+| Laser 2 | 0.5086 | 0.4828 |
+| RMS | 0.6109 | 0.5849 |
+| Maximum | 1.4336 | 1.9673 |
+
+Plane elevation residuals (fitted minus surveyed), in metres:
+
+| Laser point | Elevation residual |
+|---|---:|
+| Laser 8 | -0.0385 |
+| Laser 7 | -0.0032 |
+| Laser 6 | +0.0197 |
+| Laser 4 | +0.0013 |
+| Laser 5 | -0.0085 |
+| Laser 9 | +0.0461 |
+| Laser 3 | +0.0335 |
+| Laser 1 | -0.0217 |
+| Laser 2 | -0.0288 |
+
+Reproduce both fits and residual sets with `.venv/bin/python tests/fit_ground.py`.
