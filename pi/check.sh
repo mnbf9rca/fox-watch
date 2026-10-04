@@ -1,7 +1,80 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mode=${1:?usage: check.sh timers|capture|sync-failure}
+mode=${1:?usage: check.sh timers|capture|sync-failure|remux}
+# Also runnable off-Pi: replay a short H.264 capture and inject remux failures.
+if [[ $mode == remux ]]; then
+    python3 - "$(dirname "$0")/record.sh" <<'PY'
+import os
+from pathlib import Path
+import shutil
+import signal
+import subprocess
+import sys
+from tempfile import TemporaryDirectory
+import time
+
+recorder = Path(sys.argv[1]).resolve()
+with TemporaryDirectory() as temporary:
+    work = Path(temporary)
+    fixture = work / "capture.h264"
+    ffmpeg = shutil.which("ffmpeg")
+    subprocess.run([ffmpeg, "-v", "error", "-f", "lavfi", "-i", "color=size=64x64:rate=10",
+                    "-t", "5", "-c:v", "libx264", "-f", "h264", str(fixture)], check=True)
+    commands = work / "bin"
+    commands.mkdir()
+    for name, body in {
+        "rpicam-vid": 'for last; do :; done\ncp "$CHECK_FIXTURE" "$last"',
+        "ffmpeg": '''for last; do :; done
+case "$CHECK_REMUX" in
+empty) : > "$last" ;;
+invalid) printf 'not an MP4' > "$last" ;;
+zero) exec "$CHECK_FFMPEG" -v error -f lavfi -i color=size=64x64 -t 0 -c:v libx264 "$last" ;;
+interrupt) echo ready > "$CHECK_READY"; exec "$CHECK_FFMPEG" -re "$@" ;;
+valid) exec "$CHECK_FFMPEG" "$@" ;;
+esac''',
+    }.items():
+        command = commands / name
+        command.write_text("#!/usr/bin/env bash\nset -eu\n" + body + "\n")
+        command.chmod(0o755)
+    for case in ("empty", "invalid", "zero", "interrupt", "valid"):
+        recordings = work / case
+        recordings.mkdir()
+        ready = work / "ready"
+        env = os.environ | dict(PATH=str(commands) + os.pathsep + os.environ["PATH"],
+            START_TIME="19:00", STOP_TIME="07:00", TZ="Europe/London", SHUTTER_US="0", GAIN="0",
+            RECORDINGS_DIR=str(recordings), CHECK_FIXTURE=str(fixture), CHECK_FFMPEG=ffmpeg,
+            CHECK_REMUX=case, CHECK_READY=str(ready))
+        with subprocess.Popen(["bash", str(recorder), "--once"], env=env, start_new_session=True,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) as process:
+            try:
+                if case == "interrupt":
+                    deadline = time.monotonic() + 5
+                    while not ready.exists() and time.monotonic() < deadline:
+                        time.sleep(.01)
+                    assert ready.exists(), "remux did not start"
+                    time.sleep(.1)  # Real ffmpeg is pacing a five-second remux with -re.
+                    os.killpg(process.pid, signal.SIGTERM)
+                stdout, stderr = process.communicate(timeout=10)
+            finally:
+                if process.poll() is None:
+                    os.killpg(process.pid, signal.SIGKILL)
+                    process.wait()
+        if case == "valid":
+            assert process.returncode == 0, stderr
+            clip, = recordings.iterdir()
+            duration = subprocess.check_output(["ffprobe", "-v", "error", "-show_entries",
+                "format=duration", "-of", "csv=p=0", str(clip)], text=True)
+            assert not clip.name.startswith(".") and float(duration) > 0
+        else:
+            assert not list(recordings.iterdir()), f"{case}: published invalid MP4 or leaked hidden files"
+            assert process.returncode != 0, f"{case}: recorder reported success"
+            if case != "interrupt":
+                assert "Discarding" in stderr, stderr
+        print(f"PASS remux: {case}")
+PY
+    exit 0
+fi
 if [[ $mode == timers ]]; then
     systemctl is-active --quiet foxcam-record.timer foxcam-sync.timer || {
         echo 'FAIL timers: Fox Watch timers are missing or inactive'
@@ -80,6 +153,7 @@ capture|sync-failure)
     systemctl is-active --quiet foxcam-record.service && restore_service=1
     systemctl is-active --quiet foxcam-record.timer && restore_timer=1
     systemctl stop foxcam-record.timer foxcam-record.service
+    bash "$(dirname "$0")/check.sh" remux
     echo 'capture: recording one five-minute indoor segment as rob'
     runuser -u rob -- env RECORDINGS_DIR="$work" /opt/foxcam-pi/record.sh --once > "$work/capture.log" 2>&1 || {
         cat "$work/capture.log"; exit 1;
@@ -88,7 +162,7 @@ capture|sync-failure)
     clips=("$work/"*.mp4)
     test "${#clips[@]}" = 1
     format=$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height,r_frame_rate -of csv=p=0 "${clips[0]}")
-    test "$format" = h264,1280,720,10/1
+    test "$format" = "h264,${WIDTH:-1280},${HEIGHT:-720},10/1"
     duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "${clips[0]}")
     awk -v duration="$duration" 'BEGIN { exit !(duration >= 295 && duration <= 305) }'
     keyframes=$(ffprobe -v error -select_streams v:0 -show_packets -show_entries packet=pts_time,flags -of csv=p=0 "${clips[0]}" |
@@ -112,10 +186,10 @@ capture|sync-failure)
     boundary_start=$(date +%H:%M)
     boundary_stop=$(date -d "@$(( $(date +%s) + 65 ))" +%H:%M)
     runuser -u rob -- env RECORDINGS_DIR="$work/boundary" START_TIME="$boundary_start" STOP_TIME="$boundary_stop" \
-        timeout 90 /opt/foxcam-pi/record.sh > "$work/boundary.log" 2>&1 || { cat "$work/boundary.log"; exit 1; }
+        ALWAYS_ON=0 timeout 90 /opt/foxcam-pi/record.sh > "$work/boundary.log" 2>&1 || { cat "$work/boundary.log"; exit 1; }
     boundary_clips=("$work/boundary/"*.mp4)
     test "${#boundary_clips[@]}" = 1
     echo "PASS capture: $format; duration=${duration}s; $keyframes one-second keyframes; full decode OK; interrupted capture preserved exactly one final MP4; STOP_TIME exit=0"
     ;;
-*) echo 'usage: check.sh timers|capture|sync-failure' >&2; exit 2 ;;
+*) echo 'usage: check.sh timers|capture|sync-failure|remux' >&2; exit 2 ;;
 esac

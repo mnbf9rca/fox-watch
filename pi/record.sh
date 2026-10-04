@@ -57,8 +57,14 @@ while :; do
     child=''
     ffmpeg -v error -y -fflags +genpts -r 10 -i "$raw" -c:v copy -an -movflags +faststart "$mp4" &
     child=$!
-    wait "$child"
+    wait "$child" || { echo "Discarding $stamp: MP4 remux failed" >&2; exit 1; }
     child=''
+    if [[ ! -s $mp4 ]] ||
+        ! duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$mp4") ||
+        ! awk -v duration="$duration" 'BEGIN { exit !(duration ~ /^[0-9]+([.][0-9]+)?$/ && duration > 0) }'; then
+        echo "Discarding $stamp: empty or invalid MP4; ffprobe must report a positive duration" >&2
+        exit 1  # The EXIT trap removes both hidden files.
+    fi
     # No overwrite even if another invocation claimed this timestamp during capture.
     mv -n -- "$mp4" "$final"
     [[ ! -e $mp4 ]] || { echo "Capture already exists: $final" >&2; exit 1; }
