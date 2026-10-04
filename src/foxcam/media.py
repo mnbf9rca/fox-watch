@@ -230,7 +230,7 @@ def annotate(clip: Path, target: Path, tracks: list[dict], captions: list[str], 
                     if frame in boxes:
                         held[i] = boxes[frame]
                         x, y, w, h = held[i]
-                        points[i].append((x + w // 2, y + h // 2))
+                        points[i].append((x + w / 2, y + h))
                     if held[i] is not None and frame <= last[i]:
                         x, y, w, h = held[i]
                         cv2.rectangle(image, (x, y), (x + w, y + h), colour, 2)

@@ -224,11 +224,11 @@ def check(data, live=False, benchmark=False):
     passed(comparison)
     assert f"{MODEL}: 0/0 (n/a)" in comparison.stdout
     first_media = media_state(data / "nights")
-    # Upgrade pre-timestamp annotations even when labels match.
-    row["annotation_version"] = 2
+    # Upgrade centre-path annotations even when labels match.
+    row["annotation_version"] = 3
     sidecar.write_text(json.dumps(row))
     passed(cli(data, env, "run"))
-    assert json.loads(sidecar.read_text())["annotation_version"] == 3
+    assert json.loads(sidecar.read_text())["annotation_version"] == 4
     assert media_state(data / "nights") != first_media
     first_media = media_state(data / "nights")
     second_run = cli(data, env, "run")

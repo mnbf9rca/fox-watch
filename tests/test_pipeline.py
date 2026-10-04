@@ -56,7 +56,7 @@ def test_finish_retracks_without_old_labels_and_labels_empty_clips(tmp_path, mon
     if legacy:
         del row["tracks"]
     else:
-        row.update(annotation_label=[], annotation_version=3)
+        row.update(annotation_label=[], annotation_version=4)
     sidecar.write_text(json.dumps(row))
     for filename in [row["clip"], *frames, "20-00-00.t0.jpg", "20-00-00.t0.crop.jpg", "20-00-00.annotated.mp4"]:
         (directory / filename).touch()
@@ -79,3 +79,34 @@ def test_finish_retracks_without_old_labels_and_labels_empty_clips(tmp_path, mon
     if legacy:
         retrack.assert_called_once_with(directory / row["clip"], 100, 80, 1.2,
                                         ground_calibration=config["GROUND_CALIBRATION"])
+
+
+@pytest.mark.parametrize("raw_exists", [True, False])
+def test_bottom_centre_annotation_upgrade_is_once_only_and_preserves_expired_video(tmp_path, monkeypatch, raw_exists):
+    directory = tmp_path / "2026-09-29"
+    directory.mkdir()
+    sidecar = directory / "20-00-00.json"
+    clip, annotated = sidecar.with_suffix(".mp4"), sidecar.with_suffix(".annotated.mp4")
+    frames = [f"20-00-00.f{i}.jpg" for i in range(4)]
+    answer = {"label": "person", "confidence": 1.0}
+    boxes = [[0, 100, 70, 40, 100], [2, 260, 70, 40, 100]]
+    item = dict(id=0, **{"class": "person"}, boxes=boxes, labels={"nous/a": answer},
+                description="", entry_edge="left", exit_edge="right")
+    row = dict(clip=clip.name, night=directory.name, start_utc="2026-09-29T20:00:00Z",
+               duration_s=1, labels={"nous/a": answer}, tracks=[item], track=boxes,
+               frames=frames, entry_edge="left", exit_edge="right",
+               annotation_label=[["person", 1.0]], annotation_version=3)
+    sidecar.write_text(json.dumps(row))
+    annotated.write_bytes(b"old video")
+    if raw_exists:
+        clip.touch()
+    for name in [*frames, "20-00-00.t0.jpg", "20-00-00.t0.crop.jpg"]:
+        (directory / name).touch()
+    render = Mock(side_effect=lambda clip, target, *args: target.write_bytes(b"new video"))
+    monkeypatch.setattr(pipeline, "annotate", render)
+    config = dict(PRIMARY_MODEL="nous/a", MODELS=["nous/a"])
+    pipeline._finish(sidecar, config, date(2026, 1, 1))
+    assert annotated.read_bytes() == (b"new video" if raw_exists else b"old video")
+    assert json.loads(sidecar.read_text())["annotation_version"] == 4
+    pipeline._finish(sidecar, config, date(2026, 1, 1))
+    assert render.call_count == int(raw_exists)

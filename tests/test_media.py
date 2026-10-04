@@ -75,3 +75,30 @@ def test_mean_size_and_centroid_bounds():
     assert not _moved([[0, 100, 100, 40, 40]], .75)
     assert not _moved([], .75)
     assert not _moved([[0, 100, 100, 10, 10], [2, 115, 100, 10, 10]], 0)
+
+
+def test_annotated_path_follows_box_bottom_centres(tmp_path):
+    from foxcam.media import annotate
+
+    clip, output = tmp_path / "raw.mp4", tmp_path / "annotated.mp4"
+    writer = cv2.VideoWriter(str(clip), cv2.VideoWriter_fourcc(*"mp4v"), 10, (640, 360))
+    assert writer.isOpened()
+    for _ in range(4):
+        writer.write(np.zeros((360, 640, 3), np.uint8))
+    writer.release()
+    boxes = [[0, 100, 70, 40, 100], [2, 260, 70, 40, 100]]
+    annotate(clip, output, [dict(id=0, boxes=boxes)], ["person 100%"],
+             datetime.fromisoformat("2026-09-30T12:34:56+00:00"))
+    video = cv2.VideoCapture(str(output))
+    try:
+        for _ in range(3):
+            ok, image = video.read()
+            assert ok
+        # Between boxes: the trail is at their feet (170), not waist (120).
+        assert image[169:172, 195:205, 1].mean() > 100
+        assert image[119:122, 195:205].max() < 30
+        # The current box and its caption still draw in their original places.
+        assert image[100, 260, 1] > 100
+        assert image[40:65, 260:440].max() > 100
+    finally:
+        video.release()
