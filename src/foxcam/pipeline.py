@@ -26,6 +26,7 @@ BASE_URLS = dict(nous="https://inference-api.nousresearch.com/v1",
 
 def load_config() -> dict:
     config = {"DATA_DIR": Path(os.environ.get("DATA_DIR", "/data/foxcam")),
+              "CLASSIFY": os.environ.get("CLASSIFY", "on"),
               "MODELS": os.environ.get("MODELS", "").split(","),
               "PRIMARY_MODEL": os.environ.get("PRIMARY_MODEL", ""),
               "TZ": ZoneInfo(os.environ.get("TZ", "Europe/London")),
@@ -53,6 +54,12 @@ def load_config() -> dict:
         url = urlsplit(config[name])
         if url.scheme != "https" or not url.hostname or url.username or url.password or url.query or url.fragment:
             raise ValueError(f"{name} must be an HTTPS base URL without credentials, query or fragment")
+    if config["CLASSIFY"] not in {"on", "off"}:
+        raise ValueError("CLASSIFY must be on or off")
+    if config["CLASSIFY"] == "off":
+        # Effective local display source; configured hosted models need no keys.
+        config["MODELS"], config["PRIMARY_MODEL"] = [], "detector"
+        return config
     for model in config["MODELS"]:
         provider, separator, model_id = model.partition("/")
         if provider not in BASE_URLS or not separator or not model_id:
@@ -141,7 +148,8 @@ def _ingest(source: Path, captured: datetime, start: float, end: float, director
 
 def _finish(sidecar: Path, config: dict, cutoff: date) -> None:
     """Classify every track, refresh the annotation, expire completed raw clips."""
-    primary_model = config["PRIMARY_MODEL"]
+    enabled = config.get("CLASSIFY", "on") == "on"
+    primary_model = config["PRIMARY_MODEL"] if enabled else "detector"
     row = read_sidecar(sidecar, primary_model)
     clip = sidecar.parent / row["clip"]
     annotated = sidecar.with_suffix(".annotated.mp4")
@@ -150,7 +158,8 @@ def _finish(sidecar: Path, config: dict, cutoff: date) -> None:
         if clip.exists():
             row.update(track(clip, config["MIN_BLOB_AREA"], config["EDGE_MARGIN"], config["MIN_TRACK_MOVE_RATIO"],
                              ground_calibration=config.get("GROUND_CALIBRATION")))
-            row["labels"] = {}  # Clip-level answers do not describe the newly detected primary track.
+            if enabled:
+                row["labels"] = {}  # Clip-level answers do not describe newly detected tracks.
     images = {item["id"]: [sidecar.with_name(f"{sidecar.stem}.t{item['id']}{suffix}.jpg") for suffix in ("", ".crop")]
               for item in row["tracks"]}
     frames = [sidecar.parent / name for name in row["frames"]] + [path for pair in images.values() for path in pair]
@@ -159,11 +168,23 @@ def _finish(sidecar: Path, config: dict, cutoff: date) -> None:
               ground_calibration=config.get("GROUND_CALIBRATION"))
     primary = max(row["tracks"], key=lambda item: len(item["boxes"]), default=None)
     if primary:
-        primary["labels"] = row["labels"]  # the top-level labels are the primary track's; edits there win
+        if not enabled:
+            primary["labels"].update(row["labels"])
+            row["labels"] = primary["labels"]
+        else:
+            primary["labels"] = row["labels"]  # top-level edits win
     elif clip.exists():
-        row["labels"] = {model: {"label": "none", "confidence": 1.0} for model in config["MODELS"]}
+        if enabled:
+            row["labels"] = {model: {"label": "none", "confidence": 1.0} for model in config["MODELS"]}
+        else:
+            row["labels"]["detector"] = {"label": "none", "confidence": 1.0}
         _save(sidecar, row)
     for item in row["tracks"]:
+        if not enabled:
+            label = "vehicle" if item["class"] in VEHICLES else item["class"]
+            item["labels"]["detector"] = dict(label=label, confidence=0.0 if label == "unknown" else 1.0)
+            _save(sidecar, row)
+            continue
         for model in ([primary_model] if item["class"] == "unknown" else config["MODELS"]):
             if item["labels"].get(model, UNCLASSIFIED)["label"] != "unclassified":
                 continue
@@ -191,9 +212,9 @@ def _finish(sidecar: Path, config: dict, cutoff: date) -> None:
         row["annotation_version"] = 4
         _save(sidecar, row)
     if (date.fromisoformat(row["night"]) < cutoff
-            and all(item["labels"].get(model, UNCLASSIFIED)["label"] != "unclassified"
+            and (not enabled or all(item["labels"].get(model, UNCLASSIFIED)["label"] != "unclassified"
                     for item in row["tracks"]
-                    for model in ([primary_model] if item["class"] == "unknown" else config["MODELS"]))):
+                    for model in ([primary_model] if item["class"] == "unknown" else config["MODELS"])))):
         clip.unlink(missing_ok=True)
 
 

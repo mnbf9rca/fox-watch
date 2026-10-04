@@ -162,7 +162,7 @@ def check(data, live=False, benchmark=False):
     fixture_calibration = data / "fixture-calibration.json"
     fixture_calibration.write_text(json.dumps(calibration))
     env["GROUND_CALIBRATION"] = str(fixture_calibration)
-    env.update(MIN_FREE_GB="0", EDGE_MARGIN="120" if benchmark else "80", GAP_SECONDS="3",
+    env.update(CLASSIFY="on", MIN_FREE_GB="0", EDGE_MARGIN="120" if benchmark else "80", GAP_SECONDS="3",
                PAD_SECONDS="2", RETAIN_NIGHTS="180", START_TIME="19:00", STOP_TIME="07:00", TZ="Europe/London")
     if not live:
         for key in ("NOUS_API_KEY", "DEEPINFRA_API_KEY", "TOGETHER_API_KEY"):
@@ -228,6 +228,28 @@ def check(data, live=False, benchmark=False):
         print("PASS: live primary-only unknown-track answer and playable H.264 annotation")
         return
     assert row["labels"][MODEL] == {"label": "unclassified", "confidence": 0.0}
+    # No hosted credentials or configured models are needed in detector-only mode.
+    off_env = env | dict(CLASSIFY="off", MODELS="", PRIMARY_MODEL="")
+    for key in ("NOUS_API_KEY", "DEEPINFRA_API_KEY", "TOGETHER_API_KEY"):
+        off_env.pop(key, None)
+    off_run = cli(data, off_env, "run")
+    passed(off_run)
+    local_row = json.loads(sidecar.read_text())
+    assert local_row["labels"][MODEL] == row["labels"][MODEL]
+    assert local_row["labels"]["detector"] == {"label": "unknown", "confidence": 0.0}
+    assert local_row["annotation_label"] == [["unknown", 0.0]]
+    assert "unknown (0%)" in (data / "site" / f"{night}.html").read_text()
+    playable(annotated)
+    local_media = media_state(data / "nights")
+    # Configured hosted models must also stay dormant, including failed answers.
+    off_run = cli(data, off_env | dict(MODELS=env["MODELS"], PRIMARY_MODEL=MODEL), "run")
+    passed(off_run)
+    assert "URLError" not in off_run.stderr and MODEL not in off_run.stderr
+    assert media_state(data / "nights") == local_media
+    print("PASS: CLASSIFY=off without keys/models, detector-only site/map/annotation, "
+          "preserved hosted answers, and no retries")
+    # Resume the existing classification-on checks.
+    passed(cli(data, env, "run"))
     comparison = cli(data, env, "compare", DEEPINFRA_API_KEY="")
     passed(comparison)
     assert f"{MODEL}: 0/0 (n/a)" in comparison.stdout

@@ -16,6 +16,7 @@ from foxcam.ground import MAX_FORWARD_M, PATCH_OUTLINE_M
 PALETTE = dict(fox="#a84300", hedgehog="#626400", cat="#7051a1", badger="#333333",
                rat="#755139", mouse="#846451", bird="#176b9b", deer="#856000",
                dog="#9b5100", person="#126451", vehicle="#2549a0",
+               unknown="#777777", horse="#006c67", sheep="#006c67", cow="#006c67", bear="#006c67",
                other="#006c67", none="#546e7a", unclassified="#777777")
 EDGES = {"far", "fence", "left", "right", "unknown"}
 
@@ -31,6 +32,10 @@ def _page(title, body, css=""):
 def _answer(answer):
     if answer == {"label": "unclassified", "confidence": 0}:
         return "unclassified", 0.0
+    if isinstance(answer, dict) and answer.get("label") in {"unknown", "horse", "sheep", "cow", "bear"}:
+        # Detector classes outside the hosted classifier's vocabulary; retain validation.
+        _, confidence, _ = parse_answer(json.dumps(answer | {"label": "other"}))
+        return answer["label"], confidence
     return parse_answer(json.dumps(answer))[:2]
 
 
