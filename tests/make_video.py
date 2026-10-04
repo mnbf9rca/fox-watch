@@ -2,14 +2,15 @@ from pathlib import Path
 import subprocess
 
 import numpy as np
+import cv2
 
 
-def make_video(path: Path, moving: bool = True, sprite=None) -> None:
+def make_video(path: Path, moving: bool = True, sprite=None, size=(1280, 720)) -> None:
     """Twenty seconds at 10 fps; a grey blob or the given BGR sprite crosses left to far during seconds 8–15."""
     background = np.random.default_rng(0).integers(24, 40, (720, 1280, 3), dtype=np.uint8)
     with subprocess.Popen(
         ["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24",
-         "-s", "1280x720", "-r", "10", "-i", "pipe:0", "-an", "-c:v", "libx264",
+         "-s", f"{size[0]}x{size[1]}", "-r", "10", "-i", "pipe:0", "-an", "-c:v", "libx264",
          "-preset", "ultrafast", "-crf", "18", "-pix_fmt", "yuv420p", "-g", "10",
          "-bf", "0", "-movflags", "+faststart", str(path)],
         stdin=subprocess.PIPE,
@@ -23,6 +24,8 @@ def make_video(path: Path, moving: bool = True, sprite=None) -> None:
                     image[y:y + 80, x:x + 120] = 180
                 else:
                     image[y:y + sprite.shape[0], x:x + sprite.shape[1]] = sprite
+            if size != (1280, 720):
+                image = cv2.resize(image, size)
             encoder.stdin.write(image.tobytes())
         encoder.stdin.close()
         if encoder.wait() != 0:

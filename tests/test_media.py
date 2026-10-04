@@ -1,8 +1,35 @@
 from datetime import datetime
 
 import pytest
+import cv2
+import numpy as np
 
-from foxcam.media import _moved, _timestamp
+from foxcam.media import _moved, _timestamp, scan
+from foxcam.pipeline import load_config
+
+
+@pytest.mark.parametrize("moving", [True, False])
+def test_scan_calibrated_hedgehog_at_nine_metres(tmp_path, monkeypatch, moving):
+    monkeypatch.setenv("MODELS", "nous/a")
+    monkeypatch.setenv("PRIMARY_MODEL", "nous/a")
+    monkeypatch.delenv("MIN_BLOB_AREA", raising=False)
+    # At 1920 wide: 1478/9 px/m gives a 41x20 px body. Use an ellipse,
+    # whose silhouette is smaller than the bounding rectangle, not a large blob.
+    source = tmp_path / "hedgehog.mp4"
+    writer = cv2.VideoWriter(str(source), cv2.VideoWriter_fourcc(*"mp4v"), 10, (1920, 1080))
+    assert writer.isOpened()
+    try:
+        for frame in range(30):
+            image = np.full((1080, 1920, 3), 30, dtype=np.uint8)
+            if moving and 10 <= frame < 25:
+                cv2.ellipse(image, (200 + 20 * (frame - 10), 700), (20, 9), 0, 0, 360, (180, 180, 180), -1)
+            writer.write(image)
+    finally:
+        writer.release()
+    events = scan(source, load_config()["MIN_BLOB_AREA"])
+    assert bool(events) == moving, "calibrated small animal was discarded by motion screening"
+    if moving:
+        assert events[0][1] <= 1.1 and events[0][2] >= 2.4
 
 
 def test_per_frame_utc_timestamp():

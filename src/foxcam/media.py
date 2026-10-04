@@ -11,6 +11,9 @@ from foxcam.edges import nearest_edge
 from foxcam.events import merge_events
 
 
+SCAN_WIDTH = 640
+
+
 def scan(
     source: Path, min_blob_area: float, gap_seconds: float = 3
 ) -> list[tuple[Path, float, float]]:
@@ -24,7 +27,7 @@ def scan(
         times = []
         frame = 0
         while ok:
-            small = cv2.resize(image, (320, round(image.shape[0] * 320 / image.shape[1])))
+            small = cv2.resize(image, (SCAN_WIDTH, round(image.shape[0] * SCAN_WIDTH / image.shape[1])))
             mask = subtractor.apply(small)
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             area = max((cv2.contourArea(c) for c in contours), default=0)
@@ -101,7 +104,7 @@ def _blob_boxes(video, min_blob_area: float, width: int) -> list[list[int]]:
         mask = subtractor.apply(image)
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         contour = max(contours, key=cv2.contourArea, default=None)
-        if frame and contour is not None and cv2.contourArea(contour) > min_blob_area * (width / 320) ** 2:
+        if frame and contour is not None and cv2.contourArea(contour) > min_blob_area * (width / SCAN_WIDTH) ** 2:
             boxes.append([frame, *cv2.boundingRect(contour)])
         frame += 1
         ok, image = video.read()

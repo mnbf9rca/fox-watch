@@ -147,21 +147,21 @@ def check_rejected_inputs(data, env, fixture):
           "ignore rejected uploads/retention, and retain non-decode errors")
 
 
-def check(data, live=False):
+def check(data, live=False, benchmark=False):
     env = os.environ.copy()
     root = Path(__file__).resolve().parents[1]
     env.setdefault("MODEL_DIR", str(root / "models"))
     for assignment in shlex.split((root / "vps/foxcam.env.example").read_text(), comments=True):
         key, value = assignment.split("=", 1)
         env.setdefault(key, value)
-    env.update(MIN_FREE_GB="0", MIN_BLOB_AREA="100", EDGE_MARGIN="80", GAP_SECONDS="3",
+    env.update(MIN_FREE_GB="0", EDGE_MARGIN="120" if benchmark else "80", GAP_SECONDS="3",
                PAD_SECONDS="2", RETAIN_NIGHTS="180", START_TIME="19:00", STOP_TIME="07:00", TZ="Europe/London")
     if not live:
         for key in ("NOUS_API_KEY", "DEEPINFRA_API_KEY", "TOGETHER_API_KEY"):
             env.pop(key, None)
         env.update(MODELS=MODEL, PRIMARY_MODEL=MODEL, DEEPINFRA_BASE_URL="https://127.0.0.1:1",
                    DEEPINFRA_API_KEY="local-check-no-secret")
-    if not live:
+    if not live and not benchmark:
         check_refile(data / "refile-check", env)
     models = env["MODELS"].split(",")
     primary = env["PRIMARY_MODEL"]
@@ -173,8 +173,8 @@ def check(data, live=False):
     stamp = datetime.now(timezone.utc).replace(hour=20, minute=5, second=0, microsecond=0)
     night = night_for(stamp, time(19), ZoneInfo("Europe/London"))
     fixture = data / "fixture.mp4"
-    make_video(fixture)
-    if not live:
+    make_video(fixture, size=(1920, 1080) if benchmark else (1280, 720))
+    if not live and not benchmark:
         check_rejected_inputs(data / "rejected-check", env, fixture)
         check_calendar_boundary(data / "boundary-check", env, fixture)
     source = incoming / stamp.strftime("%Y-%m-%dT%H-%M-%SZ.mp4")
@@ -200,6 +200,10 @@ def check(data, live=False):
     assert len(throughput) == 1, completed_run.stderr
     seconds_per_minute = float(throughput[0].rsplit("(", 1)[1].split()[0])
     print(f"{throughput[0]}; real-time ratio {seconds_per_minute / 60:.2f}")
+    if benchmark:
+        assert row["labels"][MODEL]["label"] == "unclassified"
+        print("PASS: 1920x1080 offline pipeline benchmark (20 s input, moving target, playable annotation)")
+        return
     if live:
         for model in models:
             answer = row["labels"][model]
@@ -343,7 +347,9 @@ def check(data, live=False):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--live", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--live", action="store_true")
+    mode.add_argument("--benchmark", action="store_true", help="Measure one 1920x1080 offline pipeline run")
     args = parser.parse_args()
     with TemporaryDirectory() as directory:
-        check(Path(directory), live=args.live)
+        check(Path(directory), live=args.live, benchmark=args.benchmark)

@@ -28,7 +28,7 @@ def load_config() -> dict:
               "MODELS": os.environ.get("MODELS", "").split(","),
               "PRIMARY_MODEL": os.environ.get("PRIMARY_MODEL", ""),
               "TZ": ZoneInfo(os.environ.get("TZ", "Europe/London"))}
-    for name, default in dict(GAP_SECONDS=3, PAD_SECONDS=2, MIN_BLOB_AREA=100,
+    for name, default in dict(GAP_SECONDS=3, PAD_SECONDS=2, MIN_BLOB_AREA=25,
                               EDGE_MARGIN=80, MIN_TRACK_MOVE_RATIO=0.75, MIN_FREE_GB=10).items():
         config[name] = float(os.environ.get(name, default))
         if not math.isfinite(config[name]) or config[name] < 0:
