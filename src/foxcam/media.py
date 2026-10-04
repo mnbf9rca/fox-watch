@@ -6,7 +6,7 @@ import subprocess
 import cv2
 import numpy as np
 
-from foxcam.detect import detect, link
+from foxcam.detect import detect, iou, link
 from foxcam.edges import nearest_edge
 from foxcam.events import merge_events
 
@@ -94,21 +94,31 @@ def _frame(video, position: int, clip: Path):
     return image
 
 
-def _blob_boxes(video, min_blob_area: float, width: int) -> list[list[int]]:
-    """Largest MOG2 blob per frame: the fallback when the detector finds nothing."""
-    video.set(cv2.CAP_PROP_POS_FRAMES, 0)
-    subtractor = cv2.createBackgroundSubtractorMOG2(detectShadows=False)
-    boxes, frame = [], 0
-    ok, image = video.read()
-    while ok:
-        mask = subtractor.apply(image)
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        contour = max(contours, key=cv2.contourArea, default=None)
-        if frame and contour is not None and cv2.contourArea(contour) > min_blob_area * (width / SCAN_WIDTH) ** 2:
-            boxes.append([frame, *cv2.boundingRect(contour)])
-        frame += 1
-        ok, image = video.read()
-    return boxes
+def _blob_boxes(image, subtractor, min_blob_area: float) -> list[tuple]:
+    """All sizeable motion components, measured at the same scale as screening."""
+    height, width = image.shape[:2]
+    small = cv2.resize(image, (SCAN_WIDTH, round(height * SCAN_WIDTH / width)))
+    mask = subtractor.apply(small)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    scale = width / SCAN_WIDTH
+    return [("unknown", 1.0, *[round(value * scale) for value in cv2.boundingRect(contour)])
+            for contour in contours if cv2.contourArea(contour) > min_blob_area]
+
+
+def _unmatched_motion(motion: list[tuple[int, list]], tracks: list[dict]) -> list[tuple[int, list]]:
+    # Interpolate through detector sampling gaps; hold the final box for its
+    # following unsampled frame. Static detector tracks still explain motion.
+    covered = {}
+    for item in tracks:
+        boxes = item["boxes"]
+        for first, last in zip(boxes, boxes[1:] + [[boxes[-1][0] + 2, *boxes[-1][1:]]]):
+            for frame in range(first[0], last[0]):
+                fraction = (frame - first[0]) / (last[0] - first[0])
+                box = [a + fraction * (b - a) for a, b in zip(first[1:], last[1:])]
+                covered.setdefault(frame, []).append(box)
+    return [(frame, [blob for blob in found
+                     if not any(iou(blob[2:], box) > 0 for box in covered.get(frame, []))])
+            for frame, found in motion]
 
 
 def _moved(boxes: list[list[int]], ratio: float) -> bool:
@@ -126,16 +136,21 @@ def track(clip: Path, min_blob_area: float, edge_margin: float, min_track_move_r
         if not ok:
             raise ValueError(f"Cannot decode video: {clip}")
         height, width = image.shape[:2]
-        detections, frame = [], 0
+        detections, motion, frame = [], [], 0
+        subtractor = cv2.createBackgroundSubtractorMOG2(detectShadows=False)
         while ok:
+            blobs = _blob_boxes(image, subtractor, min_blob_area)
+            if frame:
+                motion.append((frame, blobs))
             if frame % 2 == 0:
                 detections.append((frame, detect(image)))
             frame += 1
             ok, image = video.read()
         tracks = link(detections)
-        if not tracks:
-            boxes = _blob_boxes(video, min_blob_area, width)
-            tracks = [{"id": 0, "class": "unknown", "boxes": boxes}] if boxes else []
+        unknown = link(_unmatched_motion(motion, tracks))
+        for item in unknown:
+            item["id"] += len(tracks)
+        tracks.extend(unknown)
         tracks = [item for item in tracks if _moved(item["boxes"], min_track_move_ratio)]
         for item in tracks:
             item["labels"], item["description"] = {}, ""
